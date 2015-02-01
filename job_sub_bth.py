@@ -129,7 +129,7 @@ class PopulationSubmitter():
         ## Create jobs
         print("Creating jobs ...")
         self.jobs = []
-        counter = loop_counter(len(bins(self.particle_ds, self.particles_per_job)), "Creating jobs")
+        counter = loop_counter(len(list(bins(self.particle_ds, self.particles_per_job))), "Creating jobs")
         for idx, particle_d_set in enumerate(bins(self.particle_ds, self.particles_per_job)):
             self.jobs.append(Job(particle_d_set, self.abc_problem.t, idx))
             counter.step()
