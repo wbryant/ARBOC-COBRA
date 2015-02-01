@@ -246,7 +246,7 @@ class Job():
         self.run_command_text = ""
         for particle_d in particle_data:
             self.particle_list.append(particle_d.name)
-            open(particle_d.pickle_file, 'w').close()
+            open(pickle_file, 'w').close()
             particle_text = particle_d.job_text.format(pickle_file)
             self.run_command_text += particle_text
         
