@@ -245,7 +245,6 @@ class Job():
         
         ## Set the same input file, and create that file from the first particle_d
         self.pickle_file = base_dir + "particles/" + self.name + ".pickle"
-        print("Run make_pickle?")
         open(self.pickle_file, 'w').close()
         particle_data[0].make_pickle(self.pickle_file)
         self.run_command_text = ""
@@ -311,7 +310,6 @@ class ParticleData():
     def make_pickle(self, pickle_file):
         """Output a pickle file of the particle for job input."""
         
-        print("Dumping pickle ...")
         f_pickle = open(pickle_file, 'w')
         pickle.dump(self.particle, f_pickle)
         f_pickle.close()
