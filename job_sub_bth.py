@@ -244,13 +244,14 @@ class Job():
             self.particle_data = particle_data
         
         ## Set the same input file, and create that file from the first particle_d
-        pickle_file = base_dir + "particles/" + self.name + ".pickle"
-        particle_data[0].make_pickle(pickle_file)
+        self.pickle_file = base_dir + "particles/" + self.name + ".pickle"
+        print("Run make_pickle?")
+        particle_data[0].make_pickle(self.pickle_file)
         self.run_command_text = ""
         for particle_d in particle_data:
             self.particle_list.append(particle_d.name)
-            open(pickle_file, 'w').close()
-            particle_text = particle_d.job_text.format(pickle_file)
+            open(self.pickle_file, 'w').close()
+            particle_text = particle_d.job_text.format(self.pickle_file)
             self.run_command_text += particle_text
         
         ## Create job file from template
@@ -309,7 +310,8 @@ class ParticleData():
 
     def make_pickle(self, pickle_file):
         """Output a pickle file of the particle for job input."""
-            
+        
+        print("Dumping pickle ...")
         f_pickle = open(pickle_file, 'w')
         pickle.dump(self.particle, f_pickle)
         f_pickle.close()
