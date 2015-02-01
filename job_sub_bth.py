@@ -19,7 +19,7 @@ from local_utils import loop_counter
 from copy import deepcopy
 from os import remove as remove_file
 
-base_dir = "/bmm/home/wbryant/BTH/analysis/ABC-SMC/ln_K_test2/"
+base_dir = "/bmm/home/wbryant/BTH/analysis/ABC-SMC/single_particle_test/"
 
 def run_remote_abc(abc_problem, particles_per_job, queue_length):
     """Use the PopulationSubmitter to run an entire ABC-SMC on the farm."""
