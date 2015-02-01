@@ -246,11 +246,11 @@ class Job():
         ## Set the same input file, and create that file from the first particle_d
         self.pickle_file = base_dir + "particles/" + self.name + ".pickle"
         print("Run make_pickle?")
+        open(self.pickle_file, 'w').close()
         particle_data[0].make_pickle(self.pickle_file)
         self.run_command_text = ""
         for particle_d in particle_data:
             self.particle_list.append(particle_d.name)
-            open(self.pickle_file, 'w').close()
             particle_text = particle_d.job_text.format(self.pickle_file)
             self.run_command_text += particle_text
         
