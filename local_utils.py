@@ -143,7 +143,7 @@ class loop_counter:
                 
     def stop(self):
         if self.stopped == False:
-            sys.stdout.write("\r - 100 %")
+            sys.stdout.write("\r - 100 %\n")
             self.stopped = True
             if self.timed:
                 time_n = time()

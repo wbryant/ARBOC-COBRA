@@ -116,21 +116,24 @@ class PopulationSubmitter():
         self.job_submit_id = -1
         
         ## Create particles with job data
-#         print("(Creating particles)")
+        print("Creating particles ...")
         self.particle_ds = []
         self.abc_problem.create_population_t()
-        counter = loop_counter(self.particles_per_job, "Creating particles ...")
+#         counter = loop_counter(self.particles_per_job, "Creating particles ...")
         for particle in self.abc_problem.population_t:
-            counter.step()
+#             counter.step()
             particle_d = ParticleData(particle)
             self.particle_ds.append(particle_d)
-        counter.stop()
+#         counter.stop()
         
         ## Create jobs
         print("Creating jobs ...")
         self.jobs = []
+        counter = loop_counter(len(bins(self.particle_ds, self.particles_per_job)), "Creating jobs")
         for idx, particle_d_set in enumerate(bins(self.particle_ds, self.particles_per_job)):
             self.jobs.append(Job(particle_d_set, self.abc_problem.t, idx))
+            counter.step()
+        counter.stop()
         print(" - done.")
         
     def submit_all_direct(self):
