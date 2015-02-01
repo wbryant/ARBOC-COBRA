@@ -17,6 +17,7 @@ from time import sleep as wait
 from time import time
 from local_utils import loop_counter
 from copy import deepcopy
+from os import remove as remove_file
 
 base_dir = "/bmm/home/wbryant/BTH/analysis/ABC-SMC/ln_K_test2/"
 
@@ -118,7 +119,7 @@ class PopulationSubmitter():
 #         print("(Creating particles)")
         self.particle_ds = []
         self.abc_problem.create_population_t()
-        counter = loop_counter(self.particles_per_job, "Creating particles")
+        counter = loop_counter(self.particles_per_job, "Creating particles ...")
         for particle in self.abc_problem.population_t:
             counter.step()
             particle_d = ParticleData(particle)
@@ -126,40 +127,12 @@ class PopulationSubmitter():
         counter.stop()
         
         ## Create jobs
-        print("(Creating jobs)")
+        print("Creating jobs ...")
         self.jobs = []
         for idx, particle_d_set in enumerate(bins(self.particle_ds, self.particles_per_job)):
             self.jobs.append(Job(particle_d_set, self.abc_problem.t, idx))
-        print("( - done.)")
-    
-             
-#     def submit_to_queue(self, counter):
-#         """Submit jobs in turn until there are queue_length jobs in the queue.
-#         """
-#         submitted_ids = []
-#         self.num_jobs = run_q_on_bamboon("qstat -u wbryant | wc -l")
-#         while self.num_jobs < self.queue_length:
-#             ## Submit another job
-#             wait(10)
-#             self.job_submit_id += 1
-#             try:
-#                 job = self.jobs[self.job_submit_id]
-#                 counter.step()
-#             except:
-#                 print("ERROR: {} jobs still running ...".format(int(self.num_jobs)))
-#                 sys.stdout.flush()
-#                 return self.num_jobs, []
-#             job.submit()
-#             if job.job_status == -1:
-#                 wait(10)
-#                 job.submit()
-#             if job.job_status == -1:
-#                 print("Job '{}' was unable to join the queue.".format(job.name))
-#             else:
-#                 self.num_jobs += 1
-#                 submitted_ids.append(job.job_id)
-#         return 0.5, submitted_ids
-    
+        print(" - done.")
+        
     def submit_all_direct(self):
         """Submit all jobs directly.  Do not submit at all if the number of 
         jobs is greater than the maximum queue size."""
@@ -207,6 +180,8 @@ class PopulationSubmitter():
 
                     
         ## When all jobs are complete, update self.abc_problem
+        for job in self.jobs:
+            remove_file(job.pickle_file)
         theta_accepted_set = []
         ln_w_accepted_set = []
         distance_set = []
@@ -245,67 +220,7 @@ class PopulationSubmitter():
             pickle.dump(self.abc_problem, f_out)
             f_out.close()
         return None
-    
-        
-#     def submit_all(self, wall_time = None):
-#         """Submit all jobs in turn and update self.abc_problem with results.
-#         """
-#         all_submitted = False
-#         submitted_ids = []     
-#         counter = loop_counter(len(self.jobs), "Submitting all jobs", timed = True)
-#         while True:
-#             wait(30)
-#             if not all_submitted:
-#                 _, queued_ids = self.submit_to_queue(counter)
-#                 submitted_ids.extend(queued_ids)
-#                 if len(submitted_ids) >= len(self.jobs):
-#                     all_submitted = True
-#             else:
-#                 num_jobs_running = run_q_on_bamboon("qstat -u wbryant | wc -l")
-#                 if num_jobs_running == 0:
-#                     print("All jobs finished after {:.1f} hours.".format((time()-counter.time_0)/3600))
-#                     sys.stdout.flush()
-#                     break
-#                 elif num_jobs_running >= 1:
-#                     if counter.stopped:
-#                         sys.stdout.write("\r{} mins elapsed ({} jobs still running)".format(int((time()-counter.time_0)/60.0), num_jobs_running))
-#                         sys.stdout.flush()
-#                     else:
-#                         counter.stop()            
-#             if wall_time:
-#                 hours_elapsed = get_job_hours_elapsed()
-#                 if hours_elapsed >= wall_time:
-#                     print("Reached wall time, cancelling jobs ...")
-#                     qdel_commands = ["qdel {}".format(int(qid)) for qid in submitted_ids]
-#                     for command in qdel_commands:
-#                         wait(10)
-#                         print("Running: '{}'".format(command))
-#                         sys.stdout.flush()
-#                         run_q_on_bamboon(command)
-#                     return 1
-#         
-#         ## When all jobs are complete, update self.abc_problem
-#         theta_accepted_set = []
-#         w_accepted_set = []
-#         distance_set = []
-#         print("Accumulating data from accepted particles ...")
-#         sys.stdout.flush()
-#         for particle_d in self.particle_ds:
-#             f_in = open(particle_d.output_file, 'r')
-#             data = f_in.readline().strip().split("\t")
-#             f_in.close()
-#             try:
-#                 theta_accepted = [int(theta) for theta in data[0].split(",")]
-#             except:
-#                 print("Theta accepted could not be created for data '{}'".format(data))
-#             w_accepted = float(data[1])
-#             theta_accepted_set.append(theta_accepted)
-#             w_accepted_set.append(w_accepted)
-#             distance_set.append(float(data[2]))
-#         print("Updating ABC problem ...")
-#         sys.stdout.flush()
-#         self.abc_problem.step_forwards(theta_accepted_set, w_accepted_set, distance_set)
-#         return None
+
 
 class Job():
     """A single job comprised of 1 or more particles for serial calculation."""
@@ -324,11 +239,16 @@ class Job():
             self.particle_data = [particle_data]
         else:
             self.particle_data = particle_data
+        
+        ## Set the same input file, and create that file from the first particle_d
+        pickle_file = base_dir + "particles/" + self.name + ".pickle"
+        particle_data[0].make_pickle(pickle_file)
         self.run_command_text = ""
         for particle_d in particle_data:
             self.particle_list.append(particle_d.name)
-            open(particle_d.output_file, 'w').close()
-            self.run_command_text += particle_d.job_text
+            open(particle_d.pickle_file, 'w').close()
+            particle_text = particle_d.job_text.format(pickle_file)
+            self.run_command_text += particle_text
         
         ## Create job file from template
         self.job_file = base_dir + "jobs/" + self.name + ".com"
@@ -375,17 +295,22 @@ class ParticleData():
 #         self.job_id = None
         self.name = "particle_{}.{}".format(self.particle.t, self.particle.id)
         
-        ## Pickle particle into particles directory
-        self.pickle_file = base_dir + "particles/" + self.name + ".pickle"
-        f_pickle = open(self.pickle_file, 'w')
-        pickle.dump(self.particle, f_pickle)
-        f_pickle.close()
+#         ## Pickle particle into particles directory
+#         self.pickle_file = base_dir + "particles/" + self.name + ".pickle"
+#         f_pickle = open(self.pickle_file, 'w')
+#         pickle.dump(self.particle, f_pickle)
+#         f_pickle.close()
         
         self.output_file = base_dir + "output/" + self.name + ".out"
-        self.job_text = particle_command_template.format(self.pickle_file, self.output_file)
+        self.job_text = particle_command_template.format("{}", self.output_file)
 
-        
-        
+    def make_pickle(self, pickle_file):
+        """Output a pickle file of the particle for job input."""
+            
+        f_pickle = open(pickle_file, 'w')
+        pickle.dump(self.particle, f_pickle)
+        f_pickle.close()
+
 qsub_template="""qsub -lnodes=limbo -q long -o {} -e {} {}"""
 
 particle_command_template = """/bmm/home/wbryant/envs/cobra/bin/python run_particle.py -i {} -o {} >> $MY_TMP_FILE\n"""

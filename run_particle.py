@@ -1,5 +1,5 @@
 import sys, argparse, pickle
-from os import remove as remove_file
+
 
 
 def main(argv=None): # IGNORE:C0111
@@ -34,9 +34,7 @@ def main(argv=None): # IGNORE:C0111
     f_out.close()
     print("Printed results to file.")
     
-    ## Delete pickle file
-    remove_file(pickle_file)
-    print("Deleted pickled particle.")
+    
 
 if __name__ == "__main__":
     main()
