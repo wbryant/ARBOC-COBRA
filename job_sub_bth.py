@@ -183,8 +183,6 @@ class PopulationSubmitter():
 
                     
         ## When all jobs are complete, update self.abc_problem
-        for job in self.jobs:
-            remove_file(job.pickle_file)
         theta_accepted_set = []
         ln_w_accepted_set = []
         distance_set = []
