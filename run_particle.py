@@ -1,4 +1,4 @@
-import sys, argparse, pickle
+import sys, argparse, pickle, os
 
 
 
@@ -20,9 +20,13 @@ def main(argv=None): # IGNORE:C0111
     result_file = args.result_file
     
     print("\nLoading particle ...")
-    f_in = open(pickle_file, 'r')
-    particle = pickle.load(f_in)
-    f_in.close()
+    if os.path.isfile(pickle_file):
+        f_in = open(pickle_file, 'r')
+        particle = pickle.load(f_in)
+        f_in.close()
+    else:
+        print("'{}' does not exist".format(pickle_file)) 
+        sys.exit()
     
     print("Finding acceptable theta ...")
     theta_accepted, ln_w, distance = particle.find_accepted_theta()
