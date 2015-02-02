@@ -18,6 +18,7 @@ from time import time
 from local_utils import loop_counter
 from copy import deepcopy
 from os import remove as remove_file
+import os
 
 base_dir = "/bmm/home/wbryant/BTH/analysis/ABC-SMC/single_particle_test/"
 
