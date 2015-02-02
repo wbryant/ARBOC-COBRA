@@ -19,7 +19,7 @@ def main(argv=None): # IGNORE:C0111
     pickle_file = args.pickle_file
     result_file = args.result_file
     
-    print("\nLoading particle ...")
+    print("\nLoading particle (dev run_particle) ...")
     if os.path.isfile(pickle_file):
         print("Reading pickle file ...")
         f_in = open(pickle_file, 'r')

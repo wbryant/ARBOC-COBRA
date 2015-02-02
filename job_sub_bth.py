@@ -317,7 +317,7 @@ class ParticleData():
 
 qsub_template="""qsub -lnodes=limbo -q long -o {} -e {} {}"""
 
-particle_command_template = """/bmm/home/wbryant/envs/cobra/bin/python run_particle.py -i {} -o {} >> $MY_TMP_FILE\n"""
+particle_command_template = """/bmm/home/wbryant/envs/cobra/bin/python ~/myutils/abcsmc_dev/run_particle.py -i {} -o {} >> $MY_TMP_FILE\n"""
 
 job_file_template = """#!/bin/sh
 
