@@ -149,6 +149,8 @@ class PopulationSubmitter():
             print("Submitting all jobs ...")
             submitted_ids = []
             for job in self.jobs:
+                if os.path.isfile(pickle_file):
+                    print("Submitting job {}, file present.".format(job.name))
                 job.submit()
                 submitted_ids.append(job.job_id)
                 wait(20)

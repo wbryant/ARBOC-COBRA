@@ -21,6 +21,7 @@ def main(argv=None): # IGNORE:C0111
     
     print("\nLoading particle ...")
     if os.path.isfile(pickle_file):
+        print("Reading pickle file ...")
         f_in = open(pickle_file, 'r')
         particle = pickle.load(f_in)
         f_in.close()
