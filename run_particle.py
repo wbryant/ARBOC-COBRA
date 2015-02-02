@@ -1,5 +1,5 @@
-import sys, argparse, pickle, os
-
+import sys, argparse, os
+import cPickle as pickle
 
 
 def main(argv=None): # IGNORE:C0111

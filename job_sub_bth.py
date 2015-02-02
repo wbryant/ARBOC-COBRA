@@ -12,7 +12,7 @@ set of model/experiment data.
 import paramiko
 # import subprocess32 as subprocess
 import sys
-import pickle
+import cPickle as pickle
 from time import sleep as wait
 from time import time
 from local_utils import loop_counter
@@ -117,7 +117,7 @@ class PopulationSubmitter():
         self.job_submit_id = -1
         
         ## Create particles with job data
-        print("Creating particles ...")
+        print("Creating particle finders ...")
         self.particle_ds = []
         self.abc_problem.create_population_t()
 #         counter = loop_counter(self.particles_per_job, "Creating particles ...")
@@ -128,7 +128,6 @@ class PopulationSubmitter():
 #         counter.stop()
         
         ## Create jobs
-        print("Creating jobs ...")
         self.jobs = []
         counter = loop_counter(len(list(bins(self.particle_ds, self.particles_per_job))), "Creating jobs")
         for idx, particle_d_set in enumerate(bins(self.particle_ds, self.particles_per_job)):
@@ -154,13 +153,13 @@ class PopulationSubmitter():
                     print("Submitting job {}, file present.".format(job.name))
                 job.submit()
                 submitted_ids.append(job.job_id)
-                wait(20)
+                wait(5)
             
             print("Monitoring jobs ...")
             ticker = 0
             interval = 5
             while True:
-                wait(30)
+                wait(20)
                 num_jobs_running = int(run_q_on_bamboon("qstat -u wbryant | wc -l")) - 5
                 ticker += 1
                 if num_jobs_running <= 0:
@@ -177,7 +176,7 @@ class PopulationSubmitter():
                     print("Reached wall time, cancelling jobs ...")
                     qdel_commands = ["qdel {}".format(int(qid)) for qid in submitted_ids]
                     for command in qdel_commands:
-                        wait(10)
+                        wait(5)
                         print("Running: '{}'".format(command))
                         sys.stdout.flush()
                         run_q_on_bamboon(command)
@@ -375,7 +374,7 @@ if __name__=="__main__":
     abc_options['default_prior_value'] = 0.99
     abc_options['epsilon_0'] = 0.6
     abc_options['epsilon_T'] = 0.4
-    abc_options['alpha'] = 0.3
+    abc_options['alpha'] = 0.6
     abc_options['particles_per_population'] = 60
     abc_options['num_populations_max'] = 5
     abc_options['model'] = bth_model

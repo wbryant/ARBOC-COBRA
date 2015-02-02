@@ -373,7 +373,7 @@ class AbcProblem():
         
     
     def run_population_t(self):
-        """Run N particles and for each add their accepted thetas and weights."""
+        """Find N acceptable particles and for each add their accepted thetas and weights."""
         
         theta_accepted_set = []
         w_accepted_set = []
@@ -688,12 +688,12 @@ class Particle():
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
-        print("\nRunning particle {}.{}:".format(self.t, self.id))
+        print("\nFinding particle:".format(self.t, self.id))
         
         while True:
             count_attempts += 1
             if debug:
-                sys.stdout.write("Attempt {} (epsilon = {}) ... ".format(count_attempts, self.epsilon))    
+                sys.stdout.write("Particle {} (epsilon = {}) ... ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
             self.propose_theta()
             self.apply_proposed_theta()
