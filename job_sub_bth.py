@@ -149,8 +149,8 @@ class PopulationSubmitter():
             print("Submitting all jobs ...")
             submitted_ids = []
             for job in self.jobs:
-                if os.path.isfile(job.pickle_file):
-                    print("Submitting job {}, file present.".format(job.name))
+#                 if os.path.isfile(job.pickle_file):
+#                     print("Submitting job {}, file present.".format(job.name))
                 job.submit()
                 submitted_ids.append(job.job_id)
                 wait(5)
@@ -159,7 +159,7 @@ class PopulationSubmitter():
             ticker = 0
             interval = 5
             while True:
-                wait(20)
+                wait(40)
                 num_jobs_running = int(run_q_on_bamboon("qstat -u wbryant | wc -l")) - 5
                 ticker += 1
                 if num_jobs_running <= 0:
@@ -372,10 +372,10 @@ if __name__=="__main__":
     
     abc_options = {}
     abc_options['default_prior_value'] = 0.99
-    abc_options['epsilon_0'] = 0.6
+    abc_options['epsilon_0'] = 0.5
     abc_options['epsilon_T'] = 0.4
-    abc_options['alpha'] = 0.6
-    abc_options['particles_per_population'] = 60
+    abc_options['alpha'] = 0.3
+    abc_options['particles_per_population'] = 1050
     abc_options['num_populations_max'] = 5
     abc_options['model'] = bth_model
     abc_options['prior_dict'] = prior_dict
@@ -386,9 +386,9 @@ if __name__=="__main__":
     print("Initialising ABC job submitter ...")
     sys.stdout.flush()
     submitter_options = {}
-    submitter_options['wall_time'] = 10 # hours
+    submitter_options['wall_time'] = 8 # hours
     submitter_options['abc_problem'] = abc_problem
-    submitter_options['particles_per_job'] = 2
+    submitter_options['particles_per_job'] = 35
     submitter_options['queue_length'] = 30
     pop_sub = PopulationSubmitter(**submitter_options)
     
