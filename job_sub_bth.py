@@ -62,13 +62,14 @@ def run_q_on_bamboon(command, ret_stdout = False):
 #     print("\n\nSubmitting '{}' to Bamboon.".format(command))
     command = command.strip() 
     stdin, stdout, stderr = ssh.exec_command(command)
-    if ret_stdout:
-        return stdout, stderr
-    text = stdout.readlines()
+    stdout_text = stdout.readlines()
     stderr_text = stderr.readlines()
+    if ret_stdout:
+        print("Returning line read stdout, stderr")
+        return stdout_text, stderr_text
 #     stdin_text = stdin.readlines()
     try:
-        return float(text[0].split(".")[0].strip())
+        return float(stdout_text[0].split(".")[0].strip())
     except:
 #         print("\nCOMMAND:")
 #         print("'" + command + "'")
