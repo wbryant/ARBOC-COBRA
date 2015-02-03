@@ -699,10 +699,9 @@ class Particle():
             self.apply_proposed_theta()
             self.conduct_experiments() 
             if debug:
-                sys.stdout.write("result = {:.3f}".format(self.result))
+                sys.stdout.write("\rresult = {:.3f}".format(self.result))
                 if self.result != 2:
                     sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
-                sys.stdout.write("\n")
                 sys.stdout.flush()
              
             ## If model is close enough to experiments, accept and return theta and calculated weight

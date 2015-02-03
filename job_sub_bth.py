@@ -190,10 +190,10 @@ class PopulationSubmitter():
         print("Accumulating data from accepted particles ...")
         sys.stdout.flush()
         for particle_d in self.particle_ds:
-            f_in = open(particle_d.output_file, 'r')
-            data = f_in.readline().strip().split("\t")
-            f_in.close()
             try:
+                f_in = open(particle_d.output_file, 'r')
+                data = f_in.readline().strip().split("\t")
+                f_in.close()
                 theta_accepted = [int(theta) for theta in data[0].split(",")]
                 ln_w_accepted = float(data[1])
                 theta_accepted_set.append(theta_accepted)
@@ -202,7 +202,7 @@ class PopulationSubmitter():
             except:
                 print("Results could not be read in for {} with data '{}'"
                     .format(particle_d.name, data))
-                print("File '{}' did not conform to correct specification"
+                print("File '{}' did not conform to correct specification or did not exist"
                     .format(particle_d.output_file))
                 return 1
 
@@ -373,7 +373,7 @@ if __name__=="__main__":
     abc_options['default_prior_value'] = 0.99
     abc_options['epsilon_0'] = 0.5
     abc_options['epsilon_T'] = 0.4
-    abc_options['alpha'] = 0.3
+    abc_options['alpha'] = 0.4
     abc_options['particles_per_population'] = 1050
     abc_options['num_populations_max'] = 5
     abc_options['model'] = bth_model
@@ -385,7 +385,7 @@ if __name__=="__main__":
     print("Initialising ABC job submitter ...")
     sys.stdout.flush()
     submitter_options = {}
-    submitter_options['wall_time'] = 8 # hours
+    submitter_options['wall_time'] = 10 # hours
     submitter_options['abc_problem'] = abc_problem
     submitter_options['particles_per_job'] = 35
     submitter_options['queue_length'] = 30
@@ -408,9 +408,10 @@ if __name__=="__main__":
             if abc_problem.t == 0:
                 print("Not enough acceptable particles could be found in the first population, exiting ...")
                 sys.exit(1)
-            abc_problem.t -= 1
-            print("Total time for ABC-SMC = {}.".format(time()-time_0))
-            break
+            else:
+                abc_problem.t -= 1
+                print("Total time for ABC-SMC = {}.".format(time()-time_0))
+                break
 
         
     
