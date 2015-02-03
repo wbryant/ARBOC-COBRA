@@ -167,8 +167,8 @@ class PopulationSubmitter():
                     break                    
                 hours_elapsed = get_job_hours_elapsed()
                 if ticker/interval == ticker/float(interval):
-                    sys.stdout.write("\r{} jobs running after {:.1f} minutes ({} hours running time)"
-                        .format(int(num_jobs_running), (time()-time_0)/60), hours_elapsed)
+                    sys.stdout.write("\r{} jobs remaining, {} hours running"
+                        .format(int(num_jobs_running), hours_elapsed))
 #                     print("\n - {} hours elapsed, {} hours wall time".format(hours_elapsed, self.wall_time))
                     sys.stdout.flush()
                 if hours_elapsed >= self.wall_time:
