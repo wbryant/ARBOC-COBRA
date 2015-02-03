@@ -38,10 +38,9 @@ def get_job_hours_elapsed():
     ## hours column, returning the maximum value
     command = "qstat -u wbryant | tr -s ' ' | rev | cut -d' ' -f 1 | rev | cut -c2"
     
-    stdout, _ = run_q_on_bamboon(command, ret_stdout = True)
-    entries = stdout.readlines()
+    stdout_text, _ = run_q_on_bamboon(command, ret_stdout = True)
     max_hours_elapsed = 0
-    for entry in entries:
+    for entry in stdout_text:
         try:
             hours_elapsed = int(entry.strip())
             if hours_elapsed > max_hours_elapsed:
@@ -65,7 +64,6 @@ def run_q_on_bamboon(command, ret_stdout = False):
     stdout_text = stdout.readlines()
     stderr_text = stderr.readlines()
     if ret_stdout:
-        print("Returning line read stdout, stderr")
         return stdout_text, stderr_text
 #     stdin_text = stdin.readlines()
     try:
