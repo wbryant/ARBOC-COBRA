@@ -56,11 +56,16 @@ def run_q_on_bamboon(command, ret_stdout = False):
     try:
         ssh.connect('bamboon.bc.ic.ac.uk', username='wbryant', password='h73B,xh9R')
     except:
-        wait(10)
-        ssh.connect('bamboon.bc.ic.ac.uk', username='wbryant', password='h73B,xh9R')
-#     print("\n\nSubmitting '{}' to Bamboon.".format(command))
+        try:
+            wait(120)
+            ssh.connect('bamboon.bc.ic.ac.uk', username='wbryant', password='h73B,xh9R')
+        except:
+            print("Not connecting to Bamboon, waiting ten minutes and retrying ...")
+            wait(600)
+            ssh.connect('bamboon.bc.ic.ac.uk', username='wbryant', password='h73B,xh9R')
     command = command.strip() 
     stdin, stdout, stderr = ssh.exec_command(command)
+    ssh.close()
     stdout_text = stdout.readlines()
     stderr_text = stderr.readlines()
     if ret_stdout:
@@ -152,13 +157,13 @@ class PopulationSubmitter():
 #                     print("Submitting job {}, file present.".format(job.name))
                 job.submit()
                 submitted_ids.append(job.job_id)
-                wait(5)
+                wait(10)
             
             print("Monitoring jobs ...")
             ticker = 0
-            interval = 5
+            interval = 1
             while True:
-                wait(40)
+                wait(900)
                 num_jobs_running = int(run_q_on_bamboon("qstat -u wbryant | wc -l")) - 5
                 ticker += 1
                 if num_jobs_running <= 0:
@@ -401,7 +406,7 @@ if __name__=="__main__":
         pop_sub.update_submitter()    
         no_result = pop_sub.submit_all_direct()
         time_end =  time()
-        print("... population {} took {} seconds.".format(t, time_end-time_t))
+        print("... population {} took {:.1f} hours.".format(t, (time_end-time_t)/3600))
         time_t = time_end
         if no_result:
             abc_problem = pop_sub.abc_problem
