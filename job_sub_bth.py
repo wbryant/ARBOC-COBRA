@@ -65,9 +65,9 @@ def run_q_on_bamboon(command, ret_stdout = False):
             ssh.connect('bamboon.bc.ic.ac.uk', username='wbryant', password='h73B,xh9R')
     command = command.strip() 
     stdin, stdout, stderr = ssh.exec_command(command)
-    ssh.close()
     stdout_text = stdout.readlines()
     stderr_text = stderr.readlines()
+    ssh.close()
     if ret_stdout:
         return stdout_text, stderr_text
 #     stdin_text = stdin.readlines()
@@ -82,7 +82,7 @@ def run_q_on_bamboon(command, ret_stdout = False):
 #         print("'" + "\n".join(stderr_text) + "'")
 #         sys.stdout.flush()
         return None
-
+    
 def bins(l, n):
     """ Yield successive n-sized chunks from l.
     """
