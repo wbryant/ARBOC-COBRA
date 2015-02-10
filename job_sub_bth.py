@@ -186,7 +186,7 @@ class PopulationSubmitter():
                         run_q_on_bamboon(command)
                     return 1
 
-
+    
                     
         ## When all jobs are complete, update self.abc_problem
         theta_accepted_set = []
@@ -384,6 +384,7 @@ if __name__=="__main__":
     abc_options['model'] = bth_model
     abc_options['prior_dict'] = prior_dict
     abc_options['experiments'] = expts
+    abc_options['p_0'] = 0.2
     
     abc_problem = abcsmc.AbcProblem(**abc_options)
     
@@ -405,7 +406,7 @@ if __name__=="__main__":
         print("\nSubmitting population {} to Bamboon ...".format(t))
         pop_sub.update_submitter()    
         no_result = pop_sub.submit_all_direct()
-        time_end =  time()
+        time_end = time()
         print("... population {} took {:.1f} hours.".format(t, (time_end-time_t)/3600))
         time_t = time_end
         if no_result:
@@ -417,7 +418,9 @@ if __name__=="__main__":
                 abc_problem.t -= 1
                 print("Total time for ABC-SMC = {}.".format(time()-time_0))
                 break
-
+        if over_time:
+            print("Time taken exceeded population limit, finishing run ...")
+            break
         
     
     ## Get data from final run and return results
