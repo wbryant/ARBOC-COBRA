@@ -185,10 +185,8 @@ class PopulationSubmitter():
                         sys.stdout.flush()
                         run_q_on_bamboon(command)
                     return 1
-
-    
                     
-        ## When all jobs are complete, update self.abc_problem
+        ## When all jobs are complete, record results in self.abc_problem
         theta_accepted_set = []
         ln_w_accepted_set = []
         distance_set = []
@@ -210,11 +208,14 @@ class PopulationSubmitter():
                 print("File '{}' did not conform to correct specification or did not exist"
                     .format(particle_d.output_file))
                 return 1
-
+        self.abc_problem.record_previous_results(theta_accepted_set, ln_w_accepted_set, distance_set)
+        
+    def step_problem_forwards(self):
+        
         print("Updating ABC problem ...")
         sys.stdout.flush()
         try:
-            self.abc_problem.step_forwards(theta_accepted_set, ln_w_accepted_set, distance_set)
+            self.abc_problem.step_forwards()
         except:
             print("step_forwards failed to execute")
             print theta_accepted_set
@@ -421,7 +422,8 @@ if __name__=="__main__":
         if over_time:
             print("Time taken exceeded population limit, finishing run ...")
             break
-        
+        else:
+            pop_sub.step_problem_forwards()
     
     ## Get data from final run and return results
     ## N.B. Final population is accessible in pop_sub.particle_ds

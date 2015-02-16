@@ -213,8 +213,6 @@ class AbcProblem():
         self.theta_set = None
         self.w_set = None
         
-
-        
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
         self.id_format = "{:0" + id_length + "d}"
@@ -249,7 +247,6 @@ class AbcProblem():
             counter.stop()
         
         ## Apply belief about rxn/gene/enzyme relationships
-        print("Applying reaction/enzyme beliefs ...")
         prior_dict = self.set_rxn_enz_priors(rxn_enz_priors, prior_dict)
         
         ## All beliefs about reactions included in the model are now in prior_dict.
@@ -282,47 +279,22 @@ class AbcProblem():
             media_list.append(expt.medium_components)
         media_count = Counter(media_list)
         precalc_media_lists = []
-#         print("Media for pre-calculation:")
         for medium_count in media_count.most_common():
             if medium_count[1] <= 10:
                 break
             else:
-                precalc_media_lists.append(medium_count[0])
-#                 print medium_count[0]
-        
+                precalc_media_lists.append(medium_count[0])        
         precalc_media = []
         for medium_list in precalc_media_lists:
             precalc_medium = {}
             for component in medium_list:
                 precalc_medium[component] = -10
             precalc_media.append(precalc_medium)
-        
         self.precalc_media = precalc_media
         self.precalc_media_frozensets = precalc_media_lists
         
         print("ABC initialisation complete.")
-    
-    def get_posterior(self):
-        """From theta_set_prev, produce a posterior parameter distribution probability."""
-        
-        print "Rewrite this function"
-#         ## Unpack theta set into lits for each parameter
-#         param_results = zip(*self.theta_set_prev)
-#         
-#         posterior_list = []
-#         
-#         for param in param_results:
-#             posterior_value = sum(param)/float(self.N)
-#             posterior_list.append(posterior_value)
-#         
-#         rxn_ids = [rxn.id for rxn in self.model.reactions]
-#         gprs = [rxn.gene_reaction_rule for rxn in self.model.reactions]
-#         
-#         print("Final results:")
-#         for entry in zip(rxn_ids, gprs, posterior_list):
-#             print("{:12}: {} ({})".format(*entry))
-        
-        
+                
     
     def set_rxn_enz_priors(self, rxn_enz_priors, prior_dict):
         """Where there is belief about certain enzyme/reaction pairs, 
@@ -341,6 +313,7 @@ class AbcProblem():
                         if (enzrxn_gene_set | gene_set) == (enzrxn_gene_set & gene_set):
                             prior_dict[rxn.id] = prior_value
         return prior_dict
+
 
     def initialise_particle(self, particle_id):
         """Create a new particle from the current ABC timepoint."""
@@ -370,75 +343,31 @@ class AbcProblem():
             self.population_t.append(self.initialise_particle(particle_id_string))
     
         
-        
-    
-    def run_population_t(self):
-        """Find N acceptable particles and for each add their accepted thetas and weights."""
-        
-        theta_accepted_set = []
-        w_accepted_set = []
-        
-        print("\nCurrent state: t = {}, p_transition = {}, epsilon = {}".format(
-                    self.t,
-                    self.p_t,
-                    self.epsilon_t
-        ))
-        
-        counter = loop_counter(self.N, " - Running population at time {}:".format(self.t), timed = True)
-        
-        
-        for particle_id in range(self.N):
-            counter.step()
-            particle_id_string = self.id_format.format(particle_id)
-            particle = self.initialise_particle(particle_id_string)
-            
-            theta_accepted, w_accepted = particle.find_accepted_theta()
-            
-            theta_accepted_set.append(theta_accepted)
-            w_accepted_set.append(w_accepted)
-            
-        ## At end, update Problem
-        
-        counter.stop()
-        
-        self.step_forwards(theta_accepted_set, w_accepted_set)
-        
     def record_previous_results(self, theta_accepted_set, ln_w_accepted_set, distance_set):
         """Add the results from the previous run to the full lists of results."""
 
         self.results_theta.append(theta_accepted_set)
         self.results_d.append(distance_set)
-        self.intermediate_theta_dict[self.t] = theta_accepted_set
-        self.update_weights(ln_w_accepted_set)
         self.results_w.append(self.w_set_prev)
+        self.intermediate_theta_dict[self.t] = theta_accepted_set
         self.theta_set_prev = deepcopy(theta_accepted_set)        
         
         
-    def step_forwards(self, theta_accepted_set, ln_w_accepted_set, distance_set):
-        """Update the problem and step forwards in time."""
+    def step_forwards(self, ln_w_accepted_set):
+        """Increment time and calculate new problem parameters."""
         
-        self.record_previous_results(theta_accepted_set, ln_w_accepted_set, distance_set)
+        self.update_weights(ln_w_accepted_set)
         if self.t < self.T-1:            
             self.t += 1
         else:
             print("This was the final run.")
             return None
         self.get_p_transition()
-        self.get_epsilon(distance_set)               
-    
-#     def run_abc(self):
-#         """Run the full ABC problem."""
-#         
-#         print("Running full ABC with {} generations and {} particles per generation."
-#             .format(self.T, self.N))
-#         
-#         for population in range(self.T):
-#             self.run_population_t()
-#         
+        self.get_epsilon()               
+           
         
     def update_weights(self, ln_weights):
         """Normalise outputed weights and update w_set_prev."""
-        
         max_ln_w = max(ln_weights)
         ln_ws_full = []
         for ln_w in ln_weights:
@@ -446,13 +375,9 @@ class AbcProblem():
                 ln_ws_full.append(0)
             else:
                 ln_ws_full.append(ln_w-max_ln_w)
-        
         weights_unnorm = [exp(ln_w) for ln_w in ln_ws_full]
-        
         sum_weights = float(sum(weights_unnorm))
-        
         weights_norm = [w/sum_weights for w in weights_unnorm]
-        
         self.w_set_prev_unnorm = weights_unnorm 
         self.w_set_prev = weights_norm
     
@@ -461,16 +386,14 @@ class AbcProblem():
         epsilon_t = self.epsilon_0 - step_size * self.t
         self.epsilon_t = epsilon_t
     
-    def get_epsilon(self, distance_set = None):
+    def get_epsilon(self):
         ## Taking into account distance scores for the previous population, 
         ## propose a new epsilon, or default to linear epsilon selection
         
-        if not distance_set:
-            self.get_epsilon_linear()
-        else:
-            distance_set_sorted = sorted(distance_set)
-            quantile_idx = int(self.alpha*len(distance_set))
-            self.epsilon_t = distance_set_sorted[quantile_idx]
+        distance_set = self.results_d[-1]
+        distance_set_sorted = sorted(distance_set)
+        quantile_idx = int(self.alpha*len(distance_set))
+        self.epsilon_t = distance_set_sorted[quantile_idx]
         
     def get_p_transition(self):
         step_size = self.p_0 / float(self.T)
