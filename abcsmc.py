@@ -8,7 +8,7 @@ from cobra.core.Model import Model
 from cobra.core import ArrayBasedModel
 from cobra.io.sbml import create_cobra_model_from_sbml_file
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
-from cobra import Reaction
+from cobra import Reaction, Metabolite
 from local_gene_parser import gene_parser
 from local_utils import *
 import numpy as np
@@ -1250,7 +1250,7 @@ class ExtendedCobraModel(ArrayBasedModel):
         will be individually tested and sourced if blocked.""" 
         
         general_metabolite_ids = general_metabolite_ids or None
-        if not hasattr(general_metabolite_ids, '__iter__'):
+        if (not hasattr(general_metabolite_ids, '__iter__')) and (general_metabolite_ids is not None):
             general_metabolite_ids = [general_metabolite_ids]
         
         if biomass_id:
@@ -1258,47 +1258,91 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         self.set_objective_to_biomass()
         self.find_blocked_reaction_components()
-        print len(self.blocked_metabolites)
         
+        blocked_reaction_ids = []
         for metabolite_id in general_metabolite_ids:
-            metabolite = self.metabolites.get_by_id(metabolite_id)
-            ##! Look at metabolite reactions, biomass and product in one other?
-            ##! If so, add that reaction to the reaction_ids list, also add metabolite to the exclusions list
-            ##! Then continue as below
+            try:
+                metabolite = self.metabolites.get_by_id(metabolite_id)
+                if metabolite not in self.blocked_metabolites:
+                    print("Metabolite '{}' is either not blocked, or is not in the biomass equation, skipping ...".format(metabolite.id))
+                    continue
+                else:
+                    self.blocked_metabolites.remove(metabolite)
+            except:
+                print("Metabolite ID '{}' could not be found, skipping ...".format(metabolite_id))
+                print("Some typical metabolite IDs are:\n")
+                met_ids = [metabolite.id for metabolite in self.metabolites]
+                met_ids = met_ids[0:4]
+                for met_id in met_ids:
+                    print met_id
+                continue
             
             ## Check that there is only one producing reaction
             if len(metabolite.reactions) != 2:
                 print("Metabolite '{}' did not have a single generating reaction, ignoring ...".format(metabolite.id))
             else:
                 ## Check it is in biomass
-                this_met_reaction_ids = [reaction.id for reaction in metablite.reactions]
+                this_met_reaction_ids = [reaction.id for reaction in metabolite.reactions]
                 if self.biomass_id not in this_met_reaction_ids:
                     print("Metabolite '{}' is not a biomass component, ignoring ...".format(metabolite.id)) 
                 else:
                     this_met_reaction_ids.remove(self.biomass_id)
-                    general_reaction_ids.append(this_met_reaction_ids[0])
-                    
-                    
-                    
-                    
-                    
-        for reaction_id in general_reaction_ids:
+                    blocked_reaction_ids.append(this_met_reaction_ids[0])
+                                   
+        for reaction_id in blocked_reaction_ids:
             reaction = self.reactions.get_by_id(reaction_id)
             self.change_objective(reaction)
             self.find_blocked_reaction_components()
-            len(self.blocked_metabolites)
         
         print("Adding source and transporter for the following metabolites:")
         for metabolite in self.blocked_metabolites:
-            print("{} ({})".format(metabolite.name, metabolite.id))
+            print("- {} ({})".format(metabolite.name, metabolite.id))
         
+        ## For now don't bother with boundary metabolites, just exchange of 
+        ## extracellular metabolites and transport
         
+        ## N.B. if the EXC metabolite differs in ID by more than just the final 
+        ## character (i.e. 'e'/'c'), this will not find it. 
         
+        f_out = open(blocked_met_file, 'w')
         
+        for metabolite_c in self.blocked_metabolites:
+            
+            ### Check for extracellular metabolite and create if not existant
+            metabolite_c_id = metabolite_c.id
+            metabolite_e_id = metabolite_c_id[:-1] + 'e'
+            try:
+                metabolite_e = self.metabolites.get_by_id(metabolite_e_id)
+            except:
+                metabolite_e = Metabolite(metabolite_e_id,
+                    formula=metabolite_c.formula,
+                    name=metabolite_c.name,
+                    compartment='e')
+            
+            ### Create transport reaction
+            tp_reaction_id = "TP_{}".format(metabolite_c_id[:-2])
+            tp_reaction_name = "{} Transport".format(metabolite_c.name)
+            transport_reaction = Reaction(tp_reaction_id)
+            transport_reaction.add_metabolites({
+                metabolite_e.id: -1.0,
+                metabolite_c.id: 1.0
+                })
+            self.add_reaction(transport_reaction)
+            
+            ### Create exchange reaction
+            ex_reaction_id = "EX_{}".format(metabolite_c_id[:-2])
+            ex_reaction_name = "{} Exchange".format(metabolite_c.name)
+            exchange_reaction = Reaction(ex_reaction_id)
+            exchange_reaction.add_metabolites({
+                metabolite_e.id: 1.0
+                })
+            self.add_reaction(exchange_reaction)
+            
+            ###! Log to 'blocked_met_file' exchange reactions for the 
+            ###! metabolites that have been sourced this way
+            f_out.write("{}\n".format(ex_reaction_id))
         
-        
-        
-        
+        f_out.close()
         
         
              
