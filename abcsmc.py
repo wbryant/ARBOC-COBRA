@@ -8,8 +8,7 @@ from cobra.core.Model import Model
 from cobra.core import ArrayBasedModel
 from cobra.io.sbml import create_cobra_model_from_sbml_file
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
-# from myutils.general.utils import f_measure_tf, loop_counter
-# from myutils.general.stats import ResultSet
+from cobra import Reaction
 from local_gene_parser import gene_parser
 from local_utils import *
 import numpy as np
@@ -954,6 +953,17 @@ def create_extended_model(model_file, objective_id = 'Biomass_BT_v2'):
 class ExtendedCobraModel(ArrayBasedModel):
     """Additional functionality for helping to use COBRA model."""
     
+    def set_biomass_id(self, biomass_id):
+        """Make a note of the biomass equation for setting the objective."""
+        
+        self.biomass_id = biomass_id
+    
+    def set_objective_to_biomass(self):
+        try:
+            self.change_objective(self.biomass_id)
+        except:
+            print("Objective could not be set to biomass: bimoass_id not set?")
+            
     def get_relevant_gene_ids(self):
         """Get a list of gene IDs for all genes implicated in non-zero flux reactions."""
         
@@ -1043,13 +1053,10 @@ class ExtendedCobraModel(ArrayBasedModel):
     def enzymes_as_gprs(self, reaction):
         """Expand the GPR for the given reaction and list all enzymes as separate GPRs.
         """
-        
         enzymes = gene_parser(reaction.gene_reaction_rule)
-        
         gpr_list = []
         for enzyme in enzymes:
             gpr_list.append(self.enzyme_to_gpr(enzyme))
-            
         return gpr_list
     
   
@@ -1058,7 +1065,6 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         USE WITH CARE! Will be dependent on current medium and objective.
         """
-        
         ## Check that model runs
         if self.opt() <= 0:
             print("Model does not currently run ...")
@@ -1157,18 +1163,16 @@ class ExtendedCobraModel(ArrayBasedModel):
     
     def set_medium(self,medium_dict):
         """
-        Set exchanges of all "EX_" reactions to zero, or what is in media_dict.
+        Set exchanges of all "EX_" reactions to zero, or what is in medium_dict.
         
-        media_dict: key = reaction ID, value = new lower bound.
+        medium_dict: key = reaction ID, value = new lower bound.
         """
         exchange_rxn_dict = {}
-        
         for reaction in self.reactions:
             if reaction.id[0:3] == "EX_":
                 ## Exchange reaction, so if lb < 0, print
                 reaction.lower_bound = 0
                 exchange_rxn_dict[reaction.id] = reaction 
-        
         for component in medium_dict:
             if component in exchange_rxn_dict:
                 exchange_rxn_dict[component].lower_bound = medium_dict[component]
@@ -1187,7 +1191,116 @@ class ExtendedCobraModel(ArrayBasedModel):
                 ## Exchange reaction, so if lb < 0, print
                 
                 if reaction.lower_bound < 0:
-                    print("%35s %5.0f %5.0f" % (reaction.name, reaction.lower_bound, reaction.upper_bound))
-                  
+                    reaction_identifier = reaction.name + " (" + reaction.id + ")"
+                    print("%45s %5.0f %5.0f" % (reaction_identifier, reaction.lower_bound, reaction.upper_bound))
+    
+    def add_source_exchange_reaction(self, compound):
+        """Create a source reaction for a metabolite to allow the take-up of 
+        that compound without a transport reaction."""
+        
+        rxn_name = "{} exchange".format(compound.name) 
+        rxn_id = "EX_{}".format(compound.id)
+        new_rxn = Reaction(rxn_id)
+        new_rxn.name = rxn_name
+        new_rxn.lower_bound = -1
+        new_rxn.upper_bound = 1000
+        new_rxn.add_metabolites({compound: -1.0})
+        self.add_reaction(new_rxn)
+        print("Reaction '{}' added to model".format(new_rxn.name))
+    
+    def find_blocked_reaction_components(self, show_not_blocked=False, tol=1e-10):
+        """Find those components of the objective reaction that cannot be created in the given conditions."""
+        try:
+            self.blocked_metabolites
+        except:
+            self.blocked_metabolites = []
+        objective_reactions = []
+        for reaction in self.reactions:
+            if reaction.objective_coefficient != 0:
+                objective_reactions.append(reaction)
+        if len(objective_reactions) == 0:
+            print("No objective set")
+            return None
+        elif len(objective_reactions) > 1:
+            print("Too many reactions in objective")
+            return None
+        else:
+            subject_reaction = objective_reactions[0]
+        for metabolite in subject_reaction.reactants:
+            test_rxn = Reaction('test')
+            test_rxn.add_metabolites({metabolite:-1})
+            self.add_reaction(test_rxn)
+            self.change_objective('test')
+#             if (self.opt() < tol) or show_not_blocked:
+#                 print("{:50s}: {}".format(metabolite.name + " (" + metabolite.id + ")", self.opt()))
+            if self.opt() < tol:
+                self.blocked_metabolites.append(metabolite)
+            test_rxn.remove_from_model()
+        self.change_objective(subject_reaction.id)
+    
+    def reset_blocked_metabolites(self):
+        self.blocked_metabolites = []
+        
+    def source_blocked_biomass_components(self, blocked_met_file, biomass_id = None, general_metabolite_ids = None):
+        """Add sources for all specific metabolites blocked in the biomass.
+        Adds exchange and uncatalysed transport reactions.
+        
+        general_metabolites is a list of 'general' metabolites 
+        included in the biomass, such as 'protein'.  The reactions producing these metabolites
+        will be individually tested and sourced if blocked.""" 
+        
+        general_metabolite_ids = general_metabolite_ids or None
+        if not hasattr(general_metabolite_ids, '__iter__'):
+            general_metabolite_ids = [general_metabolite_ids]
+        
+        if biomass_id:
+            self.set_biomass_id(biomass_id)
+        
+        self.set_objective_to_biomass()
+        self.find_blocked_reaction_components()
+        print len(self.blocked_metabolites)
+        
+        for metabolite_id in general_metabolite_ids:
+            metabolite = self.metabolites.get_by_id(metabolite_id)
+            ##! Look at metabolite reactions, biomass and product in one other?
+            ##! If so, add that reaction to the reaction_ids list, also add metabolite to the exclusions list
+            ##! Then continue as below
+            
+            ## Check that there is only one producing reaction
+            if len(metabolite.reactions) != 2:
+                print("Metabolite '{}' did not have a single generating reaction, ignoring ...".format(metabolite.id))
+            else:
+                ## Check it is in biomass
+                this_met_reaction_ids = [reaction.id for reaction in metablite.reactions]
+                if self.biomass_id not in this_met_reaction_ids:
+                    print("Metabolite '{}' is not a biomass component, ignoring ...".format(metabolite.id)) 
+                else:
+                    this_met_reaction_ids.remove(self.biomass_id)
+                    general_reaction_ids.append(this_met_reaction_ids[0])
+                    
+                    
+                    
+                    
+                    
+        for reaction_id in general_reaction_ids:
+            reaction = self.reactions.get_by_id(reaction_id)
+            self.change_objective(reaction)
+            self.find_blocked_reaction_components()
+            len(self.blocked_metabolites)
+        
+        print("Adding source and transporter for the following metabolites:")
+        for metabolite in self.blocked_metabolites:
+            print("{} ({})".format(metabolite.name, metabolite.id))
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+             
 if __name__ == '__main__':
     pass
