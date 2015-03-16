@@ -6,6 +6,7 @@ Created on 10 Mar 2014
 import re, sys
 from cobra.core.Model import Model
 from cobra.core import ArrayBasedModel
+from cobra.io import write_sbml_model
 from cobra.io.sbml import create_cobra_model_from_sbml_file
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
 from cobra import Reaction, Metabolite
@@ -80,13 +81,15 @@ def import_expt_data(model, media, objective_id="Biomass_BT_v2", data_file = Non
                 c_sources = []
             elif 'and' in c_source:
                 c_sources = c_source.split(' and ')
-            else:
+            elif c_source:
                 c_sources = [c_source]
-            #expt_medium = media[medium_base]
+            else:
+                c_sources = None
             expt_medium = deepcopy(media[medium_base])
-            for source in c_sources:
-                c_source_exchange = "EX_" + source + "(e)"
-                expt_medium[c_source_exchange] = -100
+            if c_sources:
+                for source in c_sources:
+                    c_source_exchange = "EX_" + source + "(e)"
+                    expt_medium[c_source_exchange] = -100
             
             
             experiment = Experiment(details[0], expt_medium, result, genotype, objective)
@@ -943,6 +946,7 @@ def create_extended_model(model_file, objective_id = 'Biomass_BT_v2'):
     model = create_cobra_model_from_sbml_file(model_file)
     ecm_model = ExtendedCobraModel(model)
     ecm_model.set_solver()
+    ecm_model.set_medium()
     print("done.")
     try:
         ecm_model.change_objective(objective_id)
@@ -1161,10 +1165,9 @@ class ExtendedCobraModel(ArrayBasedModel):
         else:
             return 0
     
-    def set_medium(self,medium_dict):
+    def set_medium(self,medium_dict=None):
         """
         Set exchanges of all "EX_" reactions to zero, or what is in medium_dict.
-        
         medium_dict: key = reaction ID, value = new lower bound.
         """
         exchange_rxn_dict = {}
@@ -1172,14 +1175,16 @@ class ExtendedCobraModel(ArrayBasedModel):
             if reaction.id[0:3] == "EX_":
                 ## Exchange reaction, so if lb < 0, print
                 reaction.lower_bound = 0
-                exchange_rxn_dict[reaction.id] = reaction 
-        for component in medium_dict:
-            if component in exchange_rxn_dict:
-                exchange_rxn_dict[component].lower_bound = medium_dict[component]
-            elif 'EX_' + component + '(e)' in exchange_rxn_dict:
-                exchange_rxn_dict['EX_' + component + '(e)'].lower_bound = medium_dict[component]
-            else:
-                print("Reaction ID '%s' not found, ignoring ..." % component)
+                exchange_rxn_dict[reaction.id] = reaction
+        if medium_dict: 
+            for component in medium_dict:
+                if component in exchange_rxn_dict:
+                    exchange_rxn_dict[component].lower_bound = medium_dict[component]
+                elif 'EX_' + component + '(e)' in exchange_rxn_dict:
+                    exchange_rxn_dict['EX_' + component + '(e)'].lower_bound = medium_dict[component]
+                else:
+                    print("Reaction ID '%s' not found, ignoring ..." % component)
+        self.medium_dict = medium_dict
         
         
     def show_medium(self):
@@ -1197,7 +1202,6 @@ class ExtendedCobraModel(ArrayBasedModel):
     def add_source_exchange_reaction(self, compound):
         """Create a source reaction for a metabolite to allow the take-up of 
         that compound without a transport reaction."""
-        
         rxn_name = "{} exchange".format(compound.name) 
         rxn_id = "EX_{}".format(compound.id)
         new_rxn = Reaction(rxn_id)
@@ -1241,9 +1245,11 @@ class ExtendedCobraModel(ArrayBasedModel):
     def reset_blocked_metabolites(self):
         self.blocked_metabolites = []
         
-    def source_blocked_biomass_components(self, blocked_met_file, biomass_id = None, general_metabolite_ids = None):
+    def source_blocked_biomass_components(self, blocked_met_file, biomass_id = None, general_metabolite_ids = None, xml_output_file = '\Users\wbryant\work\MTU\MTU_SEED_unblocked.xml'):
         """Add sources for all specific metabolites blocked in the biomass.
         Adds exchange and uncatalysed transport reactions.
+        
+        N.B. THIS DEPENDS ON THE CURRENT MEDIUM
         
         general_metabolites is a list of 'general' metabolites 
         included in the biomass, such as 'protein'.  The reactions producing these metabolites
@@ -1305,46 +1311,76 @@ class ExtendedCobraModel(ArrayBasedModel):
         ## character (i.e. 'e'/'c'), this will not find it. 
         
         f_out = open(blocked_met_file, 'w')
-        
+        ex_reaction_ids = []
         for metabolite_c in self.blocked_metabolites:
             
-            ### Check for extracellular metabolite and create if not existant
+            ### Check for extracellular metabolite and create if not existent
             metabolite_c_id = metabolite_c.id
             metabolite_e_id = metabolite_c_id[:-1] + 'e'
+            met_e_exists = False
             try:
                 metabolite_e = self.metabolites.get_by_id(metabolite_e_id)
+                met_e_exists = True
             except:
                 metabolite_e = Metabolite(metabolite_e_id,
                     formula=metabolite_c.formula,
                     name=metabolite_c.name,
                     compartment='e')
             
-            ### Create transport reaction
-            tp_reaction_id = "TP_{}".format(metabolite_c_id[:-2])
-            tp_reaction_name = "{} Transport".format(metabolite_c.name)
-            transport_reaction = Reaction(tp_reaction_id)
-            transport_reaction.add_metabolites({
-                metabolite_e.id: -1.0,
-                metabolite_c.id: 1.0
-                })
-            self.add_reaction(transport_reaction)
-            
-            ### Create exchange reaction
+            ### Create transport reaction if one does not exist
+            tr_rxn_exists = False
+            if met_e_exists:
+                for reaction in self.reactions:
+                    if ((metabolite_c in reaction.reactants) and (metabolite_e in reaction.products))\
+                    or ((metabolite_e in reaction.reactants) and (metabolite_c in reaction.products)):
+                        print("Transport reaction for '{}' already exists ('{}') ...".format(
+                                        metabolite_c.name, reaction.id))
+                        tr_rxn_exists = True
+                        continue    
+            if not tr_rxn_exists:
+                tr_reaction_id = "TR_{}".format(metabolite_c_id[:-2])
+                tr_reaction_name = "{} Transport".format(metabolite_c.name)
+                transport_reaction = Reaction(tr_reaction_id)
+                transport_reaction.add_metabolites({
+                    metabolite_e: -1.0,
+                    metabolite_c: 1.0
+                    })
+                self.add_reaction(transport_reaction)
+                
+            ### Create exchange reaction if one does not exist
             ex_reaction_id = "EX_{}".format(metabolite_c_id[:-2])
-            ex_reaction_name = "{} Exchange".format(metabolite_c.name)
-            exchange_reaction = Reaction(ex_reaction_id)
-            exchange_reaction.add_metabolites({
-                metabolite_e.id: 1.0
-                })
-            self.add_reaction(exchange_reaction)
+            try:
+                ex_reaction = self.reactions.get_by_id(ex_reaction_id)
+                print("Exchange reaction '{}' already exists ...".format(ex_reaction_id))
+            except:
+                ex_reaction_name = "{} Exchange".format(metabolite_c.name)
+                exchange_reaction = Reaction(ex_reaction_id)
+                exchange_reaction.add_metabolites({
+                    metabolite_e: -1.0
+                    })
+                self.add_reaction(exchange_reaction)
             
-            ###! Log to 'blocked_met_file' exchange reactions for the 
-            ###! metabolites that have been sourced this way
+            ### Log to 'blocked_met_file' exchange reactions for the 
+            ### metabolites that have been sourced this way
+            ex_reaction_ids.append(ex_reaction_id)
             f_out.write("{}\n".format(ex_reaction_id))
-        
         f_out.close()
         
-        
+        ### Test addition of exchange reactions for blocked metabolites
+        self.set_objective_to_biomass()
+        blocked_test = self.opt()
+        if blocked_test != 0:
+            print("Model runs without the addition of sources for blocked metabolites - there are no blocked metabolites")
+        else:
+            unblocked_medium = self.medium_dict
+            for reaction_id in ex_reaction_ids:
+                unblocked_medium[reaction_id] = -1
+            self.change_objective(unblocked_medium)
+            unblocked_opt = self.opt()
+            print("With unblocked metabolites, biomass growth rate is {}".format(unblocked_opt))
+            
+        ## Output model to XML file
+        write_sbml_model(self, xml_output_file)
              
 if __name__ == '__main__':
     pass

@@ -371,7 +371,6 @@ if __name__=="__main__":
     sys.stdout.flush()
     expts = abcsmc.import_expt_data(bth_model, media, data_file = ess_file)
     
-    
     print("Setting up ABC problem ...")
 
     
