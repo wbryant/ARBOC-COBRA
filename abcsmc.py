@@ -237,13 +237,14 @@ class AbcProblem():
         self.epsilon_T = epsilon_T
         self.alpha = alpha or 0.01
         self.get_p_transition()
-        self.get_epsilon(None)
+        self.get_epsilon()
         self.theta_set_prev = None
         self.w_set_prev_unnorm = None
         self.w_set_prev = None
         self.theta_set = None
         self.w_set = None
         self.include_all=include_all
+        self.default_prior_value=default_prior_value
         
         if self.include_all:
             abc_reactions = []
@@ -281,7 +282,7 @@ class AbcProblem():
                 for enzrxn_id in enzrxn_ids:
                     prior_dict[enzrxn_id] = prior_value
                 if non_enz_rxn_id:
-                    prior_dict[non_enz_rxn_id] = self.non_enz_prior
+                    prior_dict[non_enz_rxn_id] = self.default_prior_value
                 
             counter.stop()
         
@@ -429,6 +430,9 @@ class AbcProblem():
         ## Taking into account distance scores for the previous population, 
         ## propose a new epsilon, or default to linear epsilon selection
         
+        if self.t==0:
+            self.epsilon_t = self.epsilon_0
+            return None
         distance_set = self.results_d[-1]
         distance_set_sorted = sorted(distance_set)
         quantile_idx = int(self.alpha*len(distance_set))
