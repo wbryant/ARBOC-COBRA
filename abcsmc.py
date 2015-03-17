@@ -55,46 +55,76 @@ def import_media(media_shelf_file=None):
     media['tyg'] = media_shelf['tyg']
     media_shelf.close()
     return media
+
+
     
-def import_expt_data(model, media, objective_id="Biomass_BT_v2", data_file = None):
+def import_expt_data(model, media = None, objective_id="Biomass_BT_v2", data_file = None):
     """From a table of genotype/growth information, create the experiments 
-    for a particular organism."""
+    for a particular organism.
+    
+    If there are any lines at the top of the file starting with the word 
+    "MEDIUM" in the first column the next column will be the medium name and 
+    the following cells will contain medium components for specifying media 
+    used in the experiments. 
+    """
     
     objective = model.reactions.get_by_id(objective_id)
     
     data_file = data_file or '/Users/wbryant/work/BTH/analysis/gene_essentiality/essentiality_data_complete.csv'
     experiments = []
     expts_in = open(data_file,'r')
-    
+    if not media:
+        media = {}
+    line_number = 0
     for line in expts_in:
+#         line_number += 1
         if line[0] != "#":
-            details = line.split("\t")
-            medium_base = details[1]
-            c_source = details[2]
-            genotype = details[3].split(" and ")
-            result = details[4]
-            
-            c_sources = []
-            
-            ## Add carbon source to medium
-            if c_source == "-":
-                c_sources = []
-            elif 'and' in c_source:
-                c_sources = c_source.split(' and ')
-            elif c_source:
-                c_sources = [c_source]
+            details = line.strip().split("\t")
+            if details[0] == 'MEDIUM':
+                medium_name = details[1]
+                medium_components = details[2:]
+                medium_dict = {}
+                for component in medium_components:
+                    medium_dict[component.strip()] = -1
+                media[medium_name] = medium_dict
+                try:
+                    model.set_medium(medium_dict)
+                except:
+                    print("Medium '{}' cannot be set on the model - incorrect component ID?".format(medium_name))
+                    for component in medium_components:
+                        print (" - {}".format(component))        
             else:
-                c_sources = None
-            expt_medium = deepcopy(media[medium_base])
-            if c_sources:
-                for source in c_sources:
-                    c_source_exchange = "EX_" + source + "(e)"
-                    expt_medium[c_source_exchange] = -100
-            
-            
-            experiment = Experiment(details[0], expt_medium, result, genotype, objective)
-            
-            experiments.append(experiment)
+                
+                medium_base = details[1]
+                c_source = details[2]
+                genotype = details[3].split(" and ")
+                result = details[4]
+                
+#                 print line_number
+#                 print details
+#                 print medium_base
+                
+                c_sources = []
+                
+                ## Add carbon source to medium
+                if c_source == "-":
+                    c_sources = []
+                elif 'and' in c_source:
+                    c_sources = c_source.split(' and ')
+                elif c_source:
+                    c_sources = [c_source]
+                else:
+                    c_sources = None
+                expt_medium = deepcopy(media[medium_base])
+                if c_sources:
+                    for source in c_sources:
+                        c_source_exchange = "EX_" + source + "(e)"
+                        expt_medium[c_source_exchange] = -100
+                
+                
+                experiment = Experiment(details[0], expt_medium, result, genotype, objective)
+                
+                experiments.append(experiment)
     expts_in.close()
     return experiments
  
@@ -159,7 +189,8 @@ class AbcProblem():
             epsilon_T = 0.285,
             p_0 = 0.2,
             experiments=None,
-            alpha = None):
+            alpha = None,
+            include_all=False):
 
         """Set up ABC for given model
         
@@ -167,10 +198,11 @@ class AbcProblem():
         model = ExtendedCobraModel to be tested;
         get_epsilon = a function of t to calculate epsilon;
         get_p_transition = a function of t to calculate p_transition;
-        non_abc_reactions: list of reaction IDs to be excluded;
+        abc_reactions: list of reaction IDs to be included;
         prior_dict: dictionary of predefined prior values for specific reactions (rxn ID is key);
-        rxn_enz_priors: a list with entries so - ['base_rxn_id',[gene_list],prior]
-        default_prior: default prior.
+        rxn_enz_priors: a list with entries so - ['base_rxn_id',[gene_list],prior];
+        default_prior: default prior;
+        include_all: if True, include all non-exchange reactions in the ABC
         
         """
         self.t = 0
@@ -194,26 +226,30 @@ class AbcProblem():
         
         self.num_rxns = len(self.model.reactions)
         
-        ## Only a few enzymes will be completely incorrect, and be replaceable 
-        ## by an alternative.  Set prior for non-enzyme enzrxns to 1/num_rxns 
-        ## in model.
-        self.non_enz_prior = 1/float(self.num_rxns)
+#         ## Only a few enzymes will be completely incorrect, and be replaceable 
+#         ## by an alternative.  Set prior for non-enzyme enzrxns to 1/num_rxns 
+#         ## in model.
+#         self.non_enz_prior = 1/float(self.num_rxns)
         
         
         self.p_0 = p_0
         self.epsilon_0 = epsilon_0
         self.epsilon_T = epsilon_T
-        self.alpha = alpha or 0.25
-        
-        
+        self.alpha = alpha or 0.01
         self.get_p_transition()
         self.get_epsilon(None)
-        
         self.theta_set_prev = None
         self.w_set_prev_unnorm = None
         self.w_set_prev = None
         self.theta_set = None
         self.w_set = None
+        self.include_all=include_all
+        
+        if self.include_all:
+            abc_reactions = []
+            for reaction in self.model.reactions:
+                if reaction.id[0:2] != 'EX_':
+                    abc_reactions.append(reaction.id) 
         
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
@@ -233,6 +269,7 @@ class AbcProblem():
         if abc_reactions:
             ## Split all included reactions into individual enzyme/reaction pairs
             counter = loop_counter(len(abc_reactions),'Splitting ABC reactions')
+            
             for rxn_id in abc_reactions:        
                 counter.step()
                 enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
@@ -298,7 +335,7 @@ class AbcProblem():
         print("ABC initialisation complete.")
                 
     
-    def set_rxn_enz_priors(self, rxn_enz_priors, prior_dict):
+    def set_rxn_enz_priors(self, rxn_enz_priors, prior_dict, include_all=False):
         """Where there is belief about certain enzyme/reaction pairs, 
         apply this to the relevant reaction priors.
         """
@@ -894,11 +931,12 @@ class Experiment():
         
         self.medium_components = frozenset([component for component in self.medium])
     
-    def test(self, ec_model, precalc_frozensets):
+    def test(self, ec_model, precalc_frozensets = None):
         """
         Calculate whether ec_model is consistent with this experiment.
         """  
         
+        precalc_frozensets = precalc_frozensets or []
         
         ec_model.set_medium(self.medium)
         if self.objective:
