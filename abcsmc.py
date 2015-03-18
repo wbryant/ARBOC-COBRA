@@ -1237,8 +1237,8 @@ class ExtendedCobraModel(ArrayBasedModel):
                     exchange_rxn_dict[component].lower_bound = medium_dict[component]
                 elif 'EX_' + component + '(e)' in exchange_rxn_dict:
                     exchange_rxn_dict['EX_' + component + '(e)'].lower_bound = medium_dict[component]
-                else:
-                    print("Reaction ID '%s' not found, ignoring ..." % component)
+#                 else:
+#                     print("Reaction ID '%s' not found, ignoring ..." % component)
         self.medium_dict = medium_dict
         
         
