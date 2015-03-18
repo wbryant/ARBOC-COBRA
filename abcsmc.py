@@ -190,7 +190,8 @@ class AbcProblem():
             p_0 = 0.2,
             experiments=None,
             alpha = None,
-            include_all=False):
+            include_all=False,
+            prior_file=None):
 
         """Set up ABC for given model
         
@@ -266,6 +267,13 @@ class AbcProblem():
         
         if not prior_dict:
             prior_dict = {}
+        
+        if prior_file:
+            f_in = open(prior_file, 'r')
+            for line in f_in:
+                details = line.strip().split("\t")
+                prior_dict[details[0]] = float(details[1])
+            f_in.close()
         
         if abc_reactions:
             ## Split all included reactions into individual enzyme/reaction pairs
@@ -761,10 +769,11 @@ class Particle():
         num_pos_remaining = 0
         num_neg_remaining = 0
         gene_ids_in_model = self.model.get_relevant_gene_ids()
-        for expt in self.experiments:
+        for idx, expt in enumerate(self.experiments):
             all_genes_present = True
             for gene in expt.genotype:
                 if gene not in gene_ids_in_model:
+                    print("Expt {}: '{}' not present in model ...".format(idx+1, gene))
                     all_genes_present = False
                     break
             if all_genes_present:
@@ -775,6 +784,7 @@ class Particle():
                     num_neg_remaining += 1
          
         self.num_tests_total = len(valid_experiments)
+        print("{} valid experiments ...".format(len(valid_experiments)))
         
         num_failed_tests = 0
         num_succeeded_tests = 0 
@@ -787,6 +797,7 @@ class Particle():
         min_dist = 'unk'
         
         for idx, experiment in enumerate(valid_experiments):
+            
             
 #             print("Testing experiment {}".format(idx))
             expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(self.model, self.precalc_media_frozensets)
@@ -816,7 +827,9 @@ class Particle():
                 if min_dist > self.epsilon:
 #                     print("\nMin dist too high ({}), aborting".format(min_dist))
                     break
-
+            
+            print("{}: current bal.acc. = {}".format(idx, running_results.balanced_accuracy()))
+            
         self.num_tests_checked = num_succeeded_tests + num_failed_tests
 
         self.full_results = deepcopy(running_results)
@@ -1015,8 +1028,8 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         relevant_genes_list = []
         for reaction in self.reactions:
-            if (reaction.lower_bound == 0) &\
-               (reaction.upper_bound == 0):
+            if (reaction.lower_bound < 0) &\
+               (reaction.upper_bound > 0):
                 
                 gene_ids = [gene.id for gene in reaction.genes]
                 relevant_genes_list.extend(gene_ids)
