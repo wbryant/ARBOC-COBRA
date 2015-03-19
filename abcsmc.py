@@ -178,7 +178,7 @@ class AbcProblem():
     def __init__(self,
             particles_per_population,
             num_populations_max,
-            model,
+            model=None,
             abc_reactions = None,
             prior_dict = None,
             rxn_enz_priors = None,
@@ -191,7 +191,10 @@ class AbcProblem():
             experiments=None,
             alpha = None,
             include_all=False,
-            prior_file=None):
+            prior_file=None,
+            model_file=None,
+            biomass_id='biomass0',
+            experiments_file=None):
 
         """Set up ABC for given model
         
@@ -209,11 +212,24 @@ class AbcProblem():
         self.t = 0
         self.N = particles_per_population
         self.T = num_populations_max
-        self.model = deepcopy(model)
-        if experiments:
+        
+        print("Loading model ...")
+        if model_file:
+            self.model = create_extended_model(model_file,biomass_id)
+        elif model:
+            self.model = deepcopy(model)
+        else:
+            print("No model specified, exiting ...")
+            sys.exit(1)    
+        
+        print("Loading experiments ...")
+        if experiments_file:
+            self.experiments = import_expt_data(self.model, objective_id = biomass_id, data_file=experiments_file)
+        elif experiments:
             self.experiments = experiments
         else:
-            self.experiments = import_experiments(self.model, objective_name)
+            print("Experiments not specified, exiting ...")
+            sys.exit(1)
         
         ## Give total numbers of positive and negative results for calculating test cutoffs
         self.num_expts_pos = 0
@@ -222,9 +238,7 @@ class AbcProblem():
             if expt.result == 1:
                 self.num_expts_pos += 1
             else:
-                self.num_expts_neg += 1
-        
-        
+                self.num_expts_neg += 1       
         self.num_rxns = len(self.model.reactions)
         
 #         ## Only a few enzymes will be completely incorrect, and be replaceable 
@@ -246,28 +260,24 @@ class AbcProblem():
         self.w_set = None
         self.include_all=include_all
         self.default_prior_value=default_prior_value
-        
         if self.include_all:
             abc_reactions = []
             for reaction in self.model.reactions:
                 if reaction.id[0:2] != 'EX_':
                     abc_reactions.append(reaction.id) 
-        
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
         self.id_format = "{:0" + id_length + "d}"
-        
         ## Initialise results variables, for storing run results
         self.results_theta = []
         self.results_w = []
         self.results_d = []
-        
         ## This is for storing the theta sets at each timepoint
         self.intermediate_theta_dict = {}
         
+        print("Loading prior values ...")
         if not prior_dict:
             prior_dict = {}
-        
         if prior_file:
             f_in = open(prior_file, 'r')
             for line in f_in:
@@ -773,7 +783,7 @@ class Particle():
             all_genes_present = True
             for gene in expt.genotype:
                 if gene not in gene_ids_in_model:
-                    print("Expt {}: '{}' not present in model ...".format(idx+1, gene))
+#                     print("Expt {}: '{}' not present in model ...".format(idx+1, gene))
                     all_genes_present = False
                     break
             if all_genes_present:
@@ -799,7 +809,8 @@ class Particle():
         for idx, experiment in enumerate(valid_experiments):
             
             
-#             print("Testing experiment {}".format(idx))
+            sys.stdout.write("Testing experiment {}\r".format(idx))
+            sys.stdout.flush()
             expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(self.model, self.precalc_media_frozensets)
             running_results.tp += tp_add
             running_results.tn += tn_add
@@ -828,7 +839,7 @@ class Particle():
 #                     print("\nMin dist too high ({}), aborting".format(min_dist))
                     break
             
-            print("{}: current bal.acc. = {}".format(idx, running_results.balanced_accuracy()))
+#             print("{}: current bal.acc. = {}".format(idx, running_results.balanced_accuracy()))
             
         self.num_tests_checked = num_succeeded_tests + num_failed_tests
 
