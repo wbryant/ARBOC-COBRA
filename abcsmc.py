@@ -806,11 +806,13 @@ class Particle():
         running_results = ResultSet(0,0,0,0)
         min_dist = 'unk'
         
+        counter = loop_counter(len(valid_experiments), "Testing experiments")
+        
         for idx, experiment in enumerate(valid_experiments):
             
-            
-            sys.stdout.write("Testing experiment {}\r".format(idx))
-            sys.stdout.flush()
+            counter.step()
+            #sys.stdout.write("Testing experiment {}\r".format(idx))
+            #sys.stdout.flush()
             expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(self.model, self.precalc_media_frozensets)
             running_results.tp += tp_add
             running_results.tn += tn_add
@@ -840,7 +842,8 @@ class Particle():
                     break
             
 #             print("{}: current bal.acc. = {}".format(idx, running_results.balanced_accuracy()))
-            
+        
+        counter.stop()
         self.num_tests_checked = num_succeeded_tests + num_failed_tests
 
         self.full_results = deepcopy(running_results)
@@ -1447,6 +1450,10 @@ class ExtendedCobraModel(ArrayBasedModel):
             
         ## Output model to XML file
         write_sbml_model(self, xml_output_file)
-             
+    
+    def get_essential_reactions(self, medium=None):
+        """Find reactions that are individually required for growth in model, return list of IDs."""
+        
+    
 if __name__ == '__main__':
     pass
