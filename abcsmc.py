@@ -428,7 +428,7 @@ class AbcProblem():
     def update_weights(self, ln_weights = None):
         """Normalise outputed weights and update w_set_prev."""
         if ln_weights is None:
-            ln_weights = self.ln_weights
+            ln_weights = self.ln_w_accepted_set
         max_ln_w = max(ln_weights)
         ln_ws_full = []
         for ln_w in ln_weights:
