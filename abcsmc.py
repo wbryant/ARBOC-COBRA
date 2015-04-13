@@ -408,13 +408,14 @@ class AbcProblem():
         self.results_d.append(distance_set)
         self.results_w.append(self.w_set_prev)
         self.intermediate_theta_dict[self.t] = theta_accepted_set
-        self.theta_set_prev = deepcopy(theta_accepted_set)        
+        self.theta_set_prev = deepcopy(theta_accepted_set)   
+        self.ln_w_accepted_set = ln_w_accepted_set     
         
         
-    def step_forwards(self, ln_w_accepted_set):
+    def step_forwards(self):
         """Increment time and calculate new problem parameters."""
         
-        self.update_weights(ln_w_accepted_set)
+        self.update_weights()
         if self.t < self.T-1:            
             self.t += 1
         else:
@@ -424,8 +425,10 @@ class AbcProblem():
         self.get_epsilon()               
            
         
-    def update_weights(self, ln_weights):
+    def update_weights(self, ln_weights = None):
         """Normalise outputed weights and update w_set_prev."""
+        if ln_weights is None:
+            ln_weights = self.ln_weights
         max_ln_w = max(ln_weights)
         ln_ws_full = []
         for ln_w in ln_weights:
