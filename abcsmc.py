@@ -20,6 +20,66 @@ from math import sqrt, log10, ceil, exp
 import shelve
 from collections import Counter
 
+def conduct_experiments(model, experiments):
+    """Conduct experiments for model in current state and return ResultSet of results."""
+
+    ## Check all genotypes for presence in model and create a list of valid experiments
+    valid_experiments = []
+    num_pos_remaining = 0
+    num_neg_remaining = 0
+    gene_ids_in_model = model.get_relevant_gene_ids()
+#     for gene_id in sorted(gene_ids_in_model):
+#         print gene_id
+    for idx, expt in enumerate(experiments):
+#         print idx+1, expt.genotype
+        all_genes_present = True
+        for gene in expt.genotype:
+            if gene not in gene_ids_in_model:
+#                 print(" - '{}' not present in model ...".format(gene))
+                all_genes_present = False
+                break
+#             else:
+#                 print(" - '{}' present in model ...".format(gene))
+        if all_genes_present:
+            valid_experiments.append(expt)
+            if expt.result == 1:
+                num_pos_remaining += 1
+            else:
+                num_neg_remaining += 1
+     
+    num_tests_total = len(valid_experiments)
+    print("{} valid experiments ...".format(len(valid_experiments)))
+    num_failed_tests = 0
+    num_succeeded_tests = 0 
+    tp = 0
+    tn = 0
+    fp = 0
+    fn = 0
+    running_results = ResultSet(0,0,0,0)
+    counter = loop_counter(len(valid_experiments), "Testing experiments")
+    
+    for idx, experiment in enumerate(valid_experiments):
+        counter.step()
+        expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(model)
+        running_results.tp += tp_add
+        running_results.tn += tn_add
+        running_results.fp += fp_add
+        running_results.fn += fn_add
+        
+#         if experiment.result == 1:
+#             num_pos_remaining -= 1
+#         else:
+#             num_neg_remaining -= 1
+#         
+#         if expt_result == 1:
+#             num_succeeded_tests += 1
+#         if (expt_result != 1) and (expt_result != -2):
+#             num_failed_tests += 1
+        
+    counter.stop()
+    return running_results
+
+
 def import_prior_dict(
         prior_files,
         rem_default = 0.9,
@@ -680,7 +740,7 @@ class Particle():
         while True:
             count_attempts += 1
             if debug:
-                sys.stdout.write("Particle {} (epsilon = {}) ... ".format(count_attempts, self.epsilon))    
+                sys.stdout.write("\nParticle {} (epsilon = {}), ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
             self.propose_theta()
             self.apply_proposed_theta()
@@ -1045,9 +1105,7 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         relevant_genes_list = []
         for reaction in self.reactions:
-            if (reaction.lower_bound < 0) &\
-               (reaction.upper_bound > 0):
-                
+            if (reaction.lower_bound != reaction.upper_bound) or (reaction.lower_bound != 0):
                 gene_ids = [gene.id for gene in reaction.genes]
                 relevant_genes_list.extend(gene_ids)
         relevant_genes_list = list(set(relevant_genes_list))
