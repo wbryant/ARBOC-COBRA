@@ -89,23 +89,21 @@ def invert(gene_logic):
         return logic
     else:
         return logic[0].make_iter()
-    
+
 def gene_parser(gene_logic):
-    """Return a list of enzymes from a logical gene combination expression."""
+    """Return a list of enzymes from a logical gene combination expression.
+    Fixed bug returning pairs of enzymes for 'all AND' logic."""
     enzyme_list = []
     gene_logic = gene_logic.strip()
     if len(gene_logic) > 0:
-        for item in invert(gene_logic):
-            
-            ## Sort items in 'item'
-            genes = item.split(",")
+        enzyme_item_list_nr = list(set([item for item in invert(gene_logic)]))
+        for enzyme in enzyme_item_list_nr:
+            genes = enzyme.split(",")
             if type(genes) != list:
-                enzyme_list.append(item)
+                enzyme_list.append(genes)
             else:
                 enzyme_list.append(",".join(sorted(genes)))
-            
-            enzyme_list.append(item)
-    enzyme_list = list(set(enzyme_list))
+#     enzyme_list = list(set(enzyme_list))
     return enzyme_list
 
 if __name__ == '__main__':
