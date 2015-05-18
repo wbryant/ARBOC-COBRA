@@ -524,6 +524,19 @@ class AbcProblem():
         p_t = self.p_0 - step_size * self.t
         self.p_t = p_t
     
+    def export_particle_rels(self, timepoint, particle_index, rel_output_file):
+        """Export RELs from any particle from any of the timepoints."""
+        
+        f_out = open(rel_output_file,"w")
+        
+        ### For reaction in model,
+        
+        ###    if theta[t, index] == 1: export RELs 
+        
+        ###    elif not in index: export RELs.
+        
+        f_out.close()
+    
 class Particle():
     """A self-contained ABC particle that will return an accepted parameter set and its weight."""
      
@@ -815,7 +828,7 @@ class Particle():
                 theta_proposed[idx] = param_value
             return theta_proposed
  
-    def conduct_experiments(self, epsilon=None):
+    def conduct_experiments(self, epsilon=None, verbose=False):
         """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
          
 #         ## Check that the model can run without changes, else return 1
@@ -827,6 +840,8 @@ class Particle():
         self.num_tests_checked = 0
         self.num_tests_total = 0
         
+        if verbose:
+            print("Checking precaluclated media ...")
         ## Must run on all common media before experimental testing
         for precalc_medium in self.precalc_media:
             self.model.set_medium(precalc_medium)
@@ -836,7 +851,8 @@ class Particle():
                 return None
          
 #         print"No failure, continuing with test"
-         
+        if verbose:
+            print("Creating list of valid experiments ...")
         ## Check all genotypes for presence in model and create a list of valid experiments
         valid_experiments = []
         num_pos_remaining = 0
@@ -868,6 +884,9 @@ class Particle():
         
         running_results = ResultSet(0,0,0,0)
         min_dist = 'unk'
+        
+        if verbose:
+            print("Beginning tests ...")
         
         counter = loop_counter(len(valid_experiments), "Testing experiments")
         
@@ -1512,9 +1531,42 @@ class ExtendedCobraModel(ArrayBasedModel):
         ## Output model to XML file
         write_sbml_model(self, xml_output_file)
     
-    def get_essential_reactions(self, medium=None):
-        """Find reactions that are individually required for growth in model, return list of IDs."""
-        
+def compare_rel_lists(query_file, ref_file, ignore_genes=['0000000.0.peg.0']):
+    """Take two lists of RELs in separate files and give stats for similarities, excluding ignored genes."""
+    
+    results = ResultSet(0,0,0,0)
+    
+    ref_dict = {}
+    num_ref = count_lines(ref_file)
+    num_ref_found = 0
+    ref_in = open(ref_file, 'r')
+    for line in ref_in:
+        entries = line.strip().split("\t")
+        ref_rxn = entries[0]
+        ref_geneset = set(entries[1].strip().split(","))
+        dict_append(ref_dict, ref_rxn, ref_geneset)
+    ref_in.close()
+    
+    query_dict = {}
+    query_in = open(query_file, 'r')
+    for line in query_in:
+        query = line.strip().split("\t")
+        query_rxn = query[0]
+        query_geneset = set(query[1].strip().split(","))
+        query_dict[query_rxn] = query_geneset
+        if query_rxn in ref_dict:
+            if query_geneset in ref_dict[query_rxn]:
+                results.tp += 1
+            else:
+                results.fp += 1
+        else:
+            results.fn += 1
+    
+    results.tn = num_ref
+    
+    results.stats()
+    
+    return results, ref_dict, query_dict 
     
 if __name__ == '__main__':
     pass
