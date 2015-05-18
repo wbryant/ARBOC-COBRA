@@ -7,6 +7,28 @@ Created on 10 Dec 2014
 import sys
 from time import time
 
+def dict_append(app_dict,key,value, ignore_duplicates = False):
+    """
+    If a key is present in the dictionary append value to its value, else create a new entry with value as first member of list.
+    """
+    if key in app_dict:
+        if ignore_duplicates:
+            if value not in app_dict[key]:
+                app_dict[key].append(value) 
+        else:
+            app_dict[key].append(value)
+    else:
+        app_dict[key] = [value]
+        
+def count_lines(filename):
+    num_lines = 0
+     
+    f_in = open(filename, 'r')
+    for line in f_in:
+        num_lines += 1
+    
+    f_in.close()
+    return num_lines
 
 def f_measure_tf(tp,tn,fp,fn):
     try:
@@ -28,7 +50,7 @@ def f_measure_tf(tp,tn,fp,fn):
 class ResultSet:
     """A container for a set of results that can return stats"""
     
-    def __init__(self, tp, tn, fp, fn):
+    def __init__(self, tp=0, tn=0, fp=0, fn=0):
         
         self.tp = tp
         self.tn = tn
