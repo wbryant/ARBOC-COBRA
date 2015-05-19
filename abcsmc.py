@@ -336,12 +336,18 @@ class AbcProblem():
         self.intermediate_theta_dict = {}
         
         print("Loading prior values ...")
+        model_reaction_ids = [reaction.id for reaction in self.model.reactions]
         if not prior_dict:
             prior_dict = {}
         if prior_file:
             f_in = open(prior_file, 'r')
             for line in f_in:
                 details = line.strip().split("\t")
+                if details[0] not in model_reaction_ids:
+                    print("At least one reaction ID is not recognised ('{}')".format(details[0]))
+                    for reaction_id in model_reaction_ids[0:9]:
+                        print reaction_id
+                    sys.exit(1)
                 prior_dict[details[0]] = float(details[1])
             f_in.close()
         
@@ -610,44 +616,6 @@ class Particle():
             else:
                 reaction.lower_bound = 0   
                 reaction.upper_bound = 0          
-     
-#     def calculate_weight(self):
-#         """Calculate weight from accepted theta value."""
-#         if self.t == 0:
-#             self.weight=1
-#         else:
-#             prior_prob = self.pi()
-#             w_perturbation_sum = 0
-#             sum_data = zip(self.w_set_prev, self.theta_set_prev)
-#             for w_prev, theta_prev in sum_data:
-#                 contribution = w_prev * self.K_t(theta_prev)
-#                 w_perturbation_sum += contribution
-#             w_out = prior_prob / w_perturbation_sum
-#             self.weight = w_out
-#     
-#     def calculate_weight_ln(self):
-#         """To avoid underflow use log/exp to calulate weight."""
-#         if self.t == 0:
-#             self.weight=1
-#         else:
-#             a_j_set = []
-#             for idx, theta_prev in enumerate(self.theta_set_prev):
-#                 w_j = self.w_set_prev[idx]
-#                 a_j = 0
-#                 added_thetas = [sum(entry) for entry in zip(self.theta_accepted, theta_prev)]
-#                 for param_idx in range(self.num_params):
-#                     if added_thetas[param_idx] == 1:
-#                         ##Different
-#                         a_j += ln(w_j**(1.0/self.num_params)*0.2)
-#                     else:
-#                         a_j += ln(w_j**(1.0/self.num_params)*0.8)
-#                 a_j_set.append(a_j)
-#             m = max(a_j_set)
-#             a_j_minus_m_set = [a_j - m for a_j in a_j_set]
-#             exp_ajmm_sum = sum([exp(ajmm) for ajmm in a_j_minus_m_set])
-#             ln_w_i = ln(self.pi()) - m + ln(exp_ajmm_sum)
-#             w_i = exp(ln_w_i)
-#             self.weight = w_i
     
     def ln_pi(self):
         """find logarithm of the prior for calculating logarithm of weight."""
@@ -705,45 +673,7 @@ class Particle():
                 self.ln_w = self.ln_pi - self.ln_weight_denominator
             except:
                 self.ln_w = None
-        
-  
-    
-    
-#     def pi_rel(self):
-#         """Find pi_rel = pi/pi_max using logs to avoid underflow."""
-#         ## Return pi_i / pi_max (== 0 if out of float bounds)
-#         ln_pi_rel = -self.ln_pi_max
-#         for idx, param in enumerate(self.theta_accepted):
-#             if (param == 1):
-#                 ln_pi_rel += ln(self.prior_set[idx])
-#             else:
-#                 ln_pi_rel += ln(1-self.prior_set[idx])
-#         self.pi_rel = exp(ln_pi_rel)    
-#     
-#     def calculate_weight_simple_K(self):
-#         """Weight calculations are still very tricky - use simplified K_t."""
-#         
-#         if self.t == 0:
-#             self.weight = 1
-#         else:
-#             self.pi_rel()
-#             if self.pi_rel != 0:
-#                 denominator = 0
-#                 for j, theta_prev in enumerate(self.theta_set_prev):
-#                     w_j = self.w_set_prev[j]
-#                     sum_diff = 0
-#                     theta_diff = [entry[0] - entry [1] for entry in zip(self.theta_accepted, theta_prev)]
-#                     for param_idx in range(self.num_params):
-#                         if theta_diff[param_idx] != 0:
-#                             ## Different
-#                             sum_diff += 1
-#                     K_t_j = 1.0/(sum_diff + 1)**2
-#                     denominator += w_j*K_t_j
-#                 w_i = self.pi_rel/denominator
-#             else:
-#                 w_i = 0        
-#             self.weight = w_i
-        
+              
     def find_accepted_theta(self, debug = True, use_ln = True, use_simple_K=False):
         """Find accepted theta and return it with weight."""
          
@@ -841,7 +771,7 @@ class Particle():
         self.num_tests_total = 0
         
         if verbose:
-            print("Checking precaluclated media ...")
+            print("Checking precalculated media ...")
         ## Must run on all common media before experimental testing
         for precalc_medium in self.precalc_media:
             self.model.set_medium(precalc_medium)
