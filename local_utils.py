@@ -7,6 +7,15 @@ Created on 10 Dec 2014
 import sys
 from time import time
 
+def preview_dict(in_dict, limit = 10):
+    num_shown = 0
+    for key in in_dict:
+        value = in_dict[key]
+        print("{:15}  -> {}".format(key, value))
+        num_shown += 1
+        if num_shown == limit:
+            break
+
 def dict_append(app_dict,key,value, ignore_duplicates = False):
     """
     If a key is present in the dictionary append value to its value, else create a new entry with value as first member of list.
