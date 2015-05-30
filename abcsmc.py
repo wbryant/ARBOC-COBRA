@@ -1486,12 +1486,16 @@ def compare_rel_lists(query_file, ref_file, ignore_genes=['0000000.0.peg.0']):
         query_dict[query_rxn] = query_geneset
         if query_rxn in ref_dict:
             if query_geneset in ref_dict[query_rxn]:
+                
                 results.tp += 1
             else:
                 results.fp += 1
         else:
-            results.fn += 1
+            results.fp += 1
+        
+#         print results.tp, results.fp, results.tn, results.fn
     
+    results.fn = num_ref - results.tp
     results.tn = num_ref
     
     results.stats()
