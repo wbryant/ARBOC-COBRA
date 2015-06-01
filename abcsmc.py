@@ -332,6 +332,7 @@ class AbcProblem():
         self.results_theta = []
         self.results_w = []
         self.results_d = []
+        self.thetas_selected = []
         ## This is for storing the theta sets at each timepoint
         self.intermediate_theta_dict = {}
         
@@ -467,12 +468,13 @@ class AbcProblem():
             self.population_t.append(self.initialise_particle(particle_id_string))
     
         
-    def record_previous_results(self, theta_accepted_set, ln_w_accepted_set, distance_set):
+    def record_previous_results(self, theta_accepted_set, ln_w_accepted_set, distance_set, proposed_theta_idx_set):
         """Add the results from the previous run to the full lists of results."""
-
+        
         self.results_theta.append(theta_accepted_set)
         self.results_d.append(distance_set)
         self.results_w.append(self.w_set_prev)
+        self.thetas_selected.append(proposed_theta_idx_set)
         self.intermediate_theta_dict[self.t] = theta_accepted_set
         self.theta_set_prev = deepcopy(theta_accepted_set)   
         self.ln_w_accepted_set = ln_w_accepted_set     
@@ -582,6 +584,7 @@ class Particle():
         self.num_params = len(prior_set)
          
         self.theta_sampled = None
+        self.theta_sampled_idx = None
         self.theta_accepted = None
         self.theta_proposed = None
         self.weight = None
@@ -597,14 +600,15 @@ class Particle():
         if self.t > 0: 
             ## Get theta by sampling
              
-            theta_sampled_idx = np.random.choice(self.N,p=self.w_set_prev)
-            self.theta_sampled = self.theta_set_prev[theta_sampled_idx]
+            self.theta_sampled_idx = np.random.choice(self.N,p=self.w_set_prev)
+            self.theta_sampled = self.theta_set_prev[self.theta_sampled_idx]
              
             ## Perturb theta using perturbation kernel
             self.theta_proposed = self.K_t()
         else:
             ## Sample theta from prior
             self.theta_proposed = self.pi()
+            self.theta_sampled_idx = -1
          
     def apply_proposed_theta(self):
         """Set constraints on model according to proposed theta."""
@@ -699,7 +703,7 @@ class Particle():
 #                 print(" - Attempt successful, returning accepted theta ...")
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
-                return self.theta_accepted, self.ln_w, self.result
+                return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
  
     def K_t(self, theta_previous = None):
         """Perturbation function!
@@ -1466,41 +1470,62 @@ def compare_rel_lists(query_file, ref_file, ignore_genes=['0000000.0.peg.0']):
     
     results = ResultSet(0,0,0,0)
     
-    ref_dict = {}
     num_ref = count_lines(ref_file)
-    num_ref_found = 0
     ref_in = open(ref_file, 'r')
+    reference_rel_list = []
     for line in ref_in:
-        entries = line.strip().split("\t")
-        ref_rxn = entries[0]
-        ref_geneset = set(entries[1].strip().split(","))
-        dict_append(ref_dict, ref_rxn, ref_geneset)
+        entry_words = frozenset(re.findall("\w+", line))
+#         entries = line.strip().split("\t")
+#         ref_tuple = frozenset(entries[1].strip().split(",").append(entries[0]))
+#         ref_rxn = entries[0]
+#         ref_geneset = ((entries[1].strip().split(",")))
+        reference_rel_list.append(entry_words)
     ref_in.close()
+    r = set(reference_rel_list)
+     
     
-    query_dict = {}
     query_in = open(query_file, 'r')
+    query_rel_list = []
     for line in query_in:
-        query = line.strip().split("\t")
-        query_rxn = query[0]
-        query_geneset = set(query[1].strip().split(","))
-        query_dict[query_rxn] = query_geneset
-        if query_rxn in ref_dict:
-            if query_geneset in ref_dict[query_rxn]:
-                
-                results.tp += 1
-            else:
-                results.fp += 1
-        else:
-            results.fp += 1
-        
-#         print results.tp, results.fp, results.tn, results.fn
+        entry_words = frozenset(re.findall("\w+", line))
+#         entries = line.strip().split("\t")
+#         query_tuple = frozenset(entries[1].strip().split(",").append(entries[0]))
+#         query_rxn = entries[0]
+#         query_geneset = ((entries[1].strip().split(",")))
+        query_rel_list.append(entry_words)
+    query_in.close()
+    q = set(query_rel_list)
     
-    results.fn = num_ref - results.tp
-    results.tn = num_ref
+    results.tp = len(r & q)
+    results.fp = len(q - r)
+    results.fn = len(r - q)
+    results.tn = len(r | q)
+    
+    
+#     query_dict = {}
+#     query_in = open(query_file, 'r')
+#     for line in query_in:
+#         query = line.strip().split("\t")
+#         query_rxn = query[0]
+#         query_geneset = set(query[1].strip().split(","))
+#         query_dict[query_rxn] = query_geneset
+#         if query_rxn in ref_dict:
+#             if query_geneset in ref_dict[query_rxn]:
+#                 
+#                 results.tp += 1
+#             else:
+#                 results.fp += 1
+#         else:
+#             results.fp += 1
+#         
+# #         print results.tp, results.fp, results.tn, results.fn
+#     
+#     results.fn = num_ref - results.tp
+#     results.tn = num_ref
     
     results.stats()
     
-    return results, ref_dict, query_dict 
+    return results, r, q
     
 if __name__ == '__main__':
     pass
