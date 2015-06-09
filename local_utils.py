@@ -183,3 +183,14 @@ class loop_counter:
 #         elif self.timed:
 #             time_n = time()
 #             sys.stdout.write(" - {} seconds overall ...".format(time_n-self.time_0))
+
+def recast_var(var, object):
+    #Return var recast into object's type
+    obj_type = type(object)
+    if obj_type == 'int':
+        return int(var)
+    elif obj_type == 'float':
+        return float(var)
+    elif obj_type == 'str':
+        return str(var)
+
