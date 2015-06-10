@@ -118,7 +118,7 @@ def import_media(media_shelf_file=None):
 
 
     
-def import_expt_data(model, media = None, objective_id="Biomass_BT_v2", data_file = None):
+def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file = None):
     """From a table of genotype/growth information, create the experiments 
     for a particular organism.
     
