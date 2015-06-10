@@ -186,11 +186,12 @@ class loop_counter:
 
 def recast_var(var, object):
     #Return var recast into object's type
-    obj_type = type(object)
+    obj_type = str(type(object)).split("'")[1]
     if obj_type == 'int':
         return int(var)
     elif obj_type == 'float':
         return float(var)
     elif obj_type == 'str':
         return str(var)
-
+    else:
+        return var
