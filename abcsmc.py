@@ -1019,7 +1019,7 @@ class Experiment():
             ## Gene is not in model.
             return -2,0,0,0,0
         
-        model_growth = timeout(ec_model.opt(), default=0)
+        model_growth = timeout(ec_model.opt, default=0)
         ec_model.unset_genotype()
         tp = 0
         tn = 0
