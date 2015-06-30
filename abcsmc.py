@@ -20,6 +20,27 @@ from math import sqrt, log10, ceil, exp
 import shelve
 from collections import Counter
 
+def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
+    import signal
+    
+    class TimeoutError(Exception):
+        pass
+
+    def handler(signum, frame):
+        raise TimeoutError()
+
+    # set the timeout handler
+    signal.signal(signal.SIGALRM, handler) 
+    signal.alarm(timeout_duration)
+    try:
+        result = func(*args, **kwargs)
+    except TimeoutError as exc:
+        result = default
+    finally:
+        signal.alarm(0)
+
+    return result
+
 def conduct_experiments(model, experiments):
     """Conduct experiments for model in current state and return ResultSet of results."""
 
@@ -998,7 +1019,7 @@ class Experiment():
             ## Gene is not in model.
             return -2,0,0,0,0
         
-        model_growth = ec_model.opt()
+        model_growth = timeout(ec_model.opt(), default=0)
         ec_model.unset_genotype()
         tp = 0
         tn = 0
