@@ -6,8 +6,11 @@ Created on 10 Mar 2014
 import re, sys
 from cobra.core.Model import Model
 from cobra.core import ArrayBasedModel
-from cobra.io import write_sbml_model
-from cobra.io.sbml import create_cobra_model_from_sbml_file
+try:
+    from cobra.io import write_sbml_model
+except:
+    from cobra.io.sbml import write_cobra_model_to_sbml_file as write_sbml_model
+from cobra.io.sbml import create_cobra_model_from_sbml_file 
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
 from cobra import Reaction, Metabolite
 from local_gene_parser import gene_parser
@@ -710,9 +713,18 @@ class Particle():
             if debug:
                 sys.stdout.write("\nParticle {} (epsilon = {}), ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
+            if debug:
+                sys.stdout.write("\nProposing theta ...")    
+                sys.stdout.flush()
             self.propose_theta()
+            if debug:
+                sys.stdout.write("\rApplying proposed theta ...")    
+                sys.stdout.flush()
             self.apply_proposed_theta()
-            self.conduct_experiments() 
+            if debug:
+                sys.stdout.write("\rConducting experiments ...")    
+                sys.stdout.flush()
+            self.conduct_experiments(debug=debug) 
             if debug:
                 sys.stdout.write("\rresult = {:.3f}".format(self.result))
                 if self.result != 2:
@@ -783,7 +795,7 @@ class Particle():
                 theta_proposed[idx] = param_value
             return theta_proposed
  
-    def conduct_experiments(self, epsilon=None, verbose=False):
+    def conduct_experiments(self, debug = False, epsilon=None, verbose=False):
         """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
          
 #         ## Check that the model can run without changes, else return 1
@@ -795,8 +807,9 @@ class Particle():
         self.num_tests_checked = 0
         self.num_tests_total = 0
         
-        if verbose:
-            print("Checking precalculated media ...")
+        if debug:
+            sys.stdout.write("\rChecking precalculated media ...")    
+            sys.stdout.flush()
         ## Must run on all common media before experimental testing
         for precalc_medium in self.precalc_media:
             self.model.set_medium(precalc_medium)
@@ -806,8 +819,9 @@ class Particle():
                 return None
          
 #         print"No failure, continuing with test"
-        if verbose:
-            print("Creating list of valid experiments ...")
+        if debug:
+            sys.stdout.write("\rCreating list of valid experiments ...")    
+            sys.stdout.flush()
         ## Check all genotypes for presence in model and create a list of valid experiments
         valid_experiments = []
         num_pos_remaining = 0
@@ -1018,6 +1032,9 @@ class Experiment():
         elif change_to_model == -1:
             ## Gene is not in model.
             return -2,0,0,0,0
+
+        sys.stdout.write("\rOptimising ...")    
+        sys.stdout.flush()
         
         model_growth = timeout(ec_model.opt, default=0)
         ec_model.unset_genotype()
@@ -1025,6 +1042,9 @@ class Experiment():
         tn = 0
         fp = 0
         fn = 0
+        
+        sys.stdout.write("\rDone optimising ...")    
+        sys.stdout.flush()        
         
         if (model_growth > 0) and (self.result > 0):
             tp = 1
@@ -1259,7 +1279,13 @@ class ExtendedCobraModel(ArrayBasedModel):
         if new_objective:
             self.change_objective(new_objective)
         
+        sys.stdout.write("\rrunning optimize() ...")    
+        sys.stdout.flush()
+        
         self.optimize(solver=self.solver)
+
+        sys.stdout.write("\rfinished running optimize() ...")    
+        sys.stdout.flush()
         
         if self.solution.f:
             if self.solution.f < 0:
