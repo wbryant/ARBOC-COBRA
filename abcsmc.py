@@ -24,6 +24,8 @@ import shelve
 from collections import Counter
 
 def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
+    print("\nEntered timeout")
+    
     import signal
     
     class TimeoutError(Exception):
@@ -41,7 +43,8 @@ def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
         result = default
     finally:
         signal.alarm(0)
-
+    
+    print("\nExiting timeout")
     return result
 
 def conduct_experiments_single(model, experiments):
@@ -711,10 +714,10 @@ class Particle():
         while True:
             count_attempts += 1
             if debug:
-                sys.stdout.write("\nParticle {} (epsilon = {}), ".format(count_attempts, self.epsilon))    
+                sys.stdout.write("\nParticle {} (epsilon = {}),                   ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
             if debug:
-                sys.stdout.write("\nProposing theta ...")    
+                sys.stdout.write("\nProposing theta ...                           ")    
                 sys.stdout.flush()
             self.propose_theta()
             if debug:
