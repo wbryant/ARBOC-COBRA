@@ -1282,7 +1282,13 @@ class ExtendedCobraModel(ArrayBasedModel):
         if new_objective:
             self.change_objective(new_objective)
         
+        sys.stdout.write("\rrunning optimize() ...                         ")    
+        sys.stdout.flush()
+        
         self.optimize(solver=self.solver)
+
+        sys.stdout.write("\rfinished running optimize() ...                ")    
+        sys.stdout.flush()
         
         if self.solution.f:
             if self.solution.f < 0:
