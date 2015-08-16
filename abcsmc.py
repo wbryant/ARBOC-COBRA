@@ -24,7 +24,8 @@ import shelve
 from collections import Counter
 
 def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
-    print("\nentered timeout ...")
+    sys.stdout.write("\rentered timeout ...                       ")
+    sys.stdout.flush()
     
     import signal
     
@@ -40,12 +41,13 @@ def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
     try:
         result = func(*args, **kwargs)
     except TimeoutError as exc:
-        print("\ntimed out ...")
+        print("\ntimed out ...\n")
         result = default
     finally:
         signal.alarm(0)
     
-    print("\nexiting timeout ...")
+    sys.stdout.write("\rexiting timeout ...                         ")
+    sys.stdout.flush()
     return result
 
 def conduct_experiments_single(model, experiments):
