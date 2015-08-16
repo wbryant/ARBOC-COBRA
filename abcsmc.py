@@ -24,8 +24,8 @@ import shelve
 from collections import Counter
 
 def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
-    sys.stdout.write("\rentered timeout ...                       ")
-    sys.stdout.flush()
+#     sys.stdout.write("\rentered timeout ...                       ")
+#     sys.stdout.flush()
     
     import signal
     
@@ -46,8 +46,8 @@ def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
     finally:
         signal.alarm(0)
     
-    sys.stdout.write("\rexiting timeout ...                         ")
-    sys.stdout.flush()
+#     sys.stdout.write("\rexiting timeout ...                         ")
+#     sys.stdout.flush()
     return result
 
 def conduct_experiments_single(model, experiments):
@@ -708,7 +708,7 @@ class Particle():
             except:
                 self.ln_w = None
               
-    def find_accepted_theta(self, debug = True, use_ln = True, use_simple_K=False):
+    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False):
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
@@ -1039,8 +1039,8 @@ class Experiment():
             ## Gene is not in model.
             return -2,0,0,0,0
 
-        sys.stdout.write("\rOptimising ...                                    ")    
-        sys.stdout.flush()
+#         sys.stdout.write("\rOptimising ...                                    ")    
+#         sys.stdout.flush()
         
         model_growth = timeout(ec_model.opt, default=0)
         ec_model.unset_genotype()
@@ -1049,8 +1049,8 @@ class Experiment():
         fp = 0
         fn = 0
         
-        sys.stdout.write("\rDone optimising ...                               ")    
-        sys.stdout.flush()        
+#         sys.stdout.write("\rDone optimising ...                               ")    
+#         sys.stdout.flush()        
         
         if (model_growth > 0) and (self.result > 0):
             tp = 1
@@ -1281,17 +1281,17 @@ class ExtendedCobraModel(ArrayBasedModel):
     def set_solver(self, solver_string = 'glpk'):
         self.solver = solver_string
         
-    def opt(self, new_objective = None):
+    def opt(self, new_objective = None, time_limit=10):
         if new_objective:
             self.change_objective(new_objective)
         
-        sys.stdout.write("\rrunning optimize() ...                         ")    
-        sys.stdout.flush()
+#         sys.stdout.write("\rrunning optimize() ...                         ")    
+#         sys.stdout.flush()
         
-        self.optimize(solver=self.solver)
+        self.optimize(solver=self.solver, time_limit=time_limit)
 
-        sys.stdout.write("\rfinished running optimize() ...                ")    
-        sys.stdout.flush()
+#         sys.stdout.write("\rfinished running optimize() ...                ")    
+#         sys.stdout.flush()
         
         if self.solution.f:
             if self.solution.f < 0:
