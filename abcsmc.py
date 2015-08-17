@@ -868,8 +868,8 @@ class Particle():
         for idx, experiment in enumerate(valid_experiments):
             
             counter.step()
-            sys.stdout.write("\rTesting experiment {}                                 ".format(idx))
-            sys.stdout.flush()
+#             sys.stdout.write("\rTesting experiment {}                                 ".format(idx))
+#             sys.stdout.flush()
             expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(self.model, self.precalc_media_frozensets)
             running_results.tp += tp_add
             running_results.tn += tn_add
