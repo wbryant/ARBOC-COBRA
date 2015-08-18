@@ -1278,8 +1278,14 @@ class ExtendedCobraModel(ArrayBasedModel):
         undelete_model_genes(self)
         
     
-    def set_solver(self, solver_string = 'glpk'):
-        self.solver = solver_string
+    def set_solver(self, solver_string = 'cglpk'):
+        try:
+            self.optimize(solver=solver_string)
+            self.solver = solver_string
+        except:
+            self.optimize(solver='glpk')
+            self.solver = 'glpk'
+        
         
     def opt(self, new_objective = None, time_limit=10):
         if new_objective:
