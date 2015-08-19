@@ -1296,7 +1296,7 @@ class ExtendedCobraModel(ArrayBasedModel):
 #         sys.stdout.write("\rrunning optimize() ...                         ")    
 #         sys.stdout.flush()
         
-        self.optimize(solver=self.solver, time_limit=time_limit)
+        self.optimize(solver='cglpk', time_limit=time_limit)
 
 #         sys.stdout.write("\rfinished running optimize() ...                ")    
 #         sys.stdout.flush()
