@@ -1286,6 +1286,8 @@ class ExtendedCobraModel(ArrayBasedModel):
             self.optimize(solver='glpk')
             self.solver = 'glpk'
         
+        print("Solver is '{}'.".format(self.solver))
+        
         
     def opt(self, new_objective = None, time_limit=1):
         if new_objective:
