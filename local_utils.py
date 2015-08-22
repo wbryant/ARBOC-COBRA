@@ -156,7 +156,7 @@ class loop_counter:
         self.num_done += 1
         if self.num_done > self.length:
             self.stop()
-        if ((100 * self.num_done) / self.length) > self.next_progress:
+        if (((100 * self.num_done) / self.length) > self.next_progress) or (self.num_done == self.length):
             number = self.num_done-1
             if number is not None:
                 if self.length > 100:
