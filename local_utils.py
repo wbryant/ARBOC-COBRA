@@ -133,10 +133,6 @@ class ResultSet:
             print("There are no true positives.")
 
 
-
-    
-    
-
 class loop_counter:
     """Use to track progress of a loop of known length."""
     
@@ -154,7 +150,7 @@ class loop_counter:
     
     def step(self, number = None):
         self.num_done += 1
-        if self.num_done > self.length:
+        if self.num_done == self.length:
             self.stop()
         if (((100 * self.num_done) / self.length) > self.next_progress) or (self.num_done == self.length):
             number = self.num_done-1

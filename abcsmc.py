@@ -1071,13 +1071,13 @@ class Experiment():
 #         print("%3s (%d): %d" % (self.id, self.result, answer))
         return expt_result, tp, tn, fp, fn
         
-def create_extended_model(model_file, objective_id = 'Biomass_BT_v2'):
+def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_solver=True):
     """Take an ArrayBasedModel and convert to an Extended_Cobra_Model."""
     
     print("Creating extended COBRA model")
     model = create_cobra_model_from_sbml_file(model_file)
     ecm_model = ExtendedCobraModel(model)
-    ecm_model.set_solver()
+    ecm_model.set_solver(require_solver=require_solver)
     ecm_model.set_medium()
     print("done.")
     try:
@@ -1278,13 +1278,20 @@ class ExtendedCobraModel(ArrayBasedModel):
         undelete_model_genes(self)
         
     
-    def set_solver(self, solver_string = 'cglpk'):
+    def set_solver(self, solver_string = 'cglpk', require_solver=True):
         try:
             self.optimize(solver=solver_string)
             self.solver = solver_string
         except:
-            self.optimize(solver='glpk')
-            self.solver = 'glpk'
+            try:
+                self.optimize(solver='glpk')
+                self.solver = 'glpk'
+            except:
+                if not require_solver:
+                    self.solver = None
+                else:
+                    self.optimize(solver='glpk')
+                    
         
         print("Solver is '{}'.".format(self.solver))
         
