@@ -145,102 +145,69 @@ def remove_genes_keeping_enzyme(gene_combination, cog_set, gene_cog_dict):
             gene_subset_cog_list.extend(gene_cog_dict[gene])
         gene_subset_cog_set = set(gene_subset_cog_list)
 
-def get_enzyme_cogs(gene_list, gene_cog_dict):
+def get_enzyme_cogs(proposed_enzyme, target_enzyme_cogs, gene_cog_dict):
+    """Get all COGs of which there is at least one member gene in the enzyme, limited to COGs in the target enzyme."""
     cog_list = []
-    for gene in gene_list:
-        cog_list.extend(gene_cog_dict[gene])
+    for gene in proposed_enzyme:
+        cog_list.extend(set(gene_cog_dict[gene]) & target_enzyme_cogs)
     return set(cog_list)
 
-def get_gene_by_gene_cogs(gene_list, gene_cog_dict):
+def get_gene_by_gene_cogs(proposed_enzyme, target_enzyme_cogs, gene_cog_dict):
+    """Get COG memberships for each gene in enzyme, limited to COGs in the target enzyme."""
     cogs_list = []
-    for gene in gene_list:
-        cogs_list.append(set(gene_cog_dict[gene]))
+    for gene in proposed_enzyme:
+        cogs_list.append(set(gene_cog_dict[gene]) & target_enzyme_cogs)
     return cogs_list
 
-def add_gene(enzyme_cogs, gene_cog_dict, cog_gene_dict, enzyme_genes = None, fulfilled_cogs = None):
-    print "\nIn 'add_gene2()'"
-    base_enzyme_genes = enzyme_genes or []
-    fulfilled_cogs = fulfilled_cogs or set([])
+def add_gene(target_enzyme_cogs, gene_cog_dict, cog_gene_dict, proposed_enzyme = None, fulfilled_cogs = None):
+    """Generator for all enzymes with membership of all target_enzyme_cogs, without duplicate enzymes or redundant genes."""
     
-    print "Pre-append enzyme:",enzyme_genes
-    next_cog_to_fill = sorted(list(enzyme_cogs-fulfilled_cogs))[0]
-    print "Next COG to fill:", next_cog_to_fill
+    base_enzyme_genes = proposed_enzyme or []
+    fulfilled_cogs = get_enzyme_cogs(base_enzyme_genes, target_enzyme_cogs, gene_cog_dict)
     
-    for gene in cog_gene_dict[next_cog_to_fill]:
+    ## Which COG will we try to find a member of?
+    next_cog_to_fill = sorted(list(target_enzyme_cogs-fulfilled_cogs))[0]
+    gene_members_of_cog = cog_gene_dict[next_cog_to_fill] 
+    
+    for gene in gene_members_of_cog:
         
-        print "\nIn gene loop, COG:", next_cog_to_fill
+        #print "\nBase enzyme:", base_enzyme_genes
+        #print "COG to fill:", next_cog_to_fill
+        #print "Proposed gene:", gene
         
-        ## Check whether any current gene's COGs are a subset of the proposed gene, if so pass
+        ## Check whether any already-present gene's COG set is a subset of the proposed gene's COG set, if so skip addition
         subset_found = False
-        new_gene_cogs = set(gene_cog_dict[gene])
-        for gene_cogs_set in get_gene_by_gene_cogs(base_enzyme_genes, gene_cog_dict):
-            if gene_cogs_set.issubset(new_gene_cogs):
+        proposed_gene_cogs = set(gene_cog_dict[gene]) & target_enzyme_cogs
+        #print "Proposed gene COGs:", proposed_gene_cogs, ", testing against:"
+        for gene_cogs_set in get_gene_by_gene_cogs(base_enzyme_genes, target_enzyme_cogs, gene_cog_dict):
+            #print " -", gene_cogs_set
+            if gene_cogs_set.issubset(proposed_gene_cogs):
+                #print "Subset found ..."
                 subset_found = True
                 break
         if subset_found:
-            print "Subset found ..."
             continue
         
-        print "Appending gene: ", gene
-        enzyme_genes = deepcopy(base_enzyme_genes)
-        enzyme_genes.append(gene)
+        #print "Adding gene ..."
         
-        fulfilled_cogs = get_enzyme_cogs(enzyme_genes, gene_cog_dict)
-        print "Current enzyme: ", enzyme_genes
-        print "Fulfilled COGs: ", fulfilled_cogs
+        ## Add gene to proposed enzyme
+        proposed_enzyme = deepcopy(base_enzyme_genes)
+        proposed_enzyme.append(gene)
         
-        if (fulfilled_cogs & enzyme_cogs) == enzyme_cogs:
-            print "Yielding: ", enzyme_genes
-            enzyme = deepcopy(enzyme_genes)
-            enzyme_genes.remove(gene)
+        ## Determine which COG memberships are fulfilled by the genes in the proposed enzyme
+        fulfilled_cogs = get_enzyme_cogs(proposed_enzyme, target_enzyme_cogs, gene_cog_dict)
+        
+        if (fulfilled_cogs & target_enzyme_cogs) == target_enzyme_cogs:
+            ## Proposed enzyme has members of every required COG, so yield 
+            enzyme = deepcopy(proposed_enzyme)
+            proposed_enzyme.remove(gene)
             yield enzyme
         else:
-            print "Not yielding, looping"
-            for enzyme in add_gene(enzyme_cogs, gene_cog_dict, cog_gene_dict, enzyme_genes, fulfilled_cogs):
+            ## Proposed enzyme is still missing some COG members
+            for enzyme in add_gene(target_enzyme_cogs, gene_cog_dict, cog_gene_dict, proposed_enzyme, fulfilled_cogs):
                 yield enzyme
 
 
-def add_gene_verbose(enzyme_cogs, gene_cog_dict, cog_gene_dict, enzyme_genes = None, fulfilled_cogs = None):
-    print "\nIn 'add_gene2()'"
-    base_enzyme_genes = enzyme_genes or []
-    fulfilled_cogs = fulfilled_cogs or set([])
-    
-    print "Pre-append enzyme:",enzyme_genes
-    next_cog_to_fill = sorted(list(enzyme_cogs-fulfilled_cogs))[0]
-    print "Next COG to fill:", next_cog_to_fill
-    
-    for gene in cog_gene_dict[next_cog_to_fill]:
-        
-        print "\nIn gene loop, COG:", next_cog_to_fill
-        
-        ## Check whether any current gene's COGs are a subset of the proposed gene, if so pass
-        subset_found = False
-        new_gene_cogs = set(gene_cog_dict[gene])
-        for gene_cogs_set in get_gene_by_gene_cogs(base_enzyme_genes, gene_cog_dict):
-            if gene_cogs_set.issubset(new_gene_cogs):
-                subset_found = True
-                break
-        if subset_found:
-            print "Subset found ..."
-            continue
-        
-        print "Appending gene: ", gene
-        enzyme_genes = deepcopy(base_enzyme_genes)
-        enzyme_genes.append(gene)
-        
-        fulfilled_cogs = get_enzyme_cogs(enzyme_genes, gene_cog_dict)
-        print "Current enzyme: ", enzyme_genes
-        print "Fulfilled COGs: ", fulfilled_cogs
-        
-        if (fulfilled_cogs & enzyme_cogs) == enzyme_cogs:
-            print "Yielding: ", enzyme_genes
-            enzyme = deepcopy(enzyme_genes)
-            enzyme_genes.remove(gene)
-            yield enzyme
-        else:
-            print "Not yielding, looping"
-            for enzyme in add_gene_verbose(enzyme_cogs, gene_cog_dict, cog_gene_dict, enzyme_genes, fulfilled_cogs):
-                yield enzyme
         
         
         
