@@ -148,37 +148,31 @@ class loop_counter:
         sys.stdout.write("\r - %d %%" % self.num_done)
         sys.stdout.flush()
     
-    def step(self, number = None):
+    def step(self):
         self.num_done += 1
-        if self.num_done == self.length:
-            self.stop()
-        if (((100 * self.num_done) / self.length) > self.next_progress) or (self.num_done == self.length):
-            number = self.num_done-1
-            if number is not None:
+        if not self.stopped:
+            if self.num_done >= self.length:
+                self.stop()
+            elif (((100 * self.num_done) / self.length) > self.next_progress):
                 if self.length > 100:
-                    sys.stdout.write("\r - %d %%  (%d / %d)" % (self.next_progress, number, self.length))
+                    sys.stdout.write("\r - %d %%  (%d / %d)" % (self.next_progress, sel.num_done, self.length))
                 else:
                     percent_done = int(100*self.num_done/float(self.length))
-                    sys.stdout.write("\r - %d %%  (%d / %d)" % (percent_done, number, self.length))
-            else:
-                sys.stdout.write("\r - %d %%" % self.next_progress)    
-            if self.timed:
-                time_n = time()
-                sys.stdout.write(" - {} seconds".format(time_n-self.time_0))
-            sys.stdout.flush()
-            self.next_progress += 1
+                    sys.stdout.write("\r - %d %%  (%d / %d)" % (percent_done, self.num_done, self.length))
+#                 if self.timed:
+#                     time_n = time()
+#                     sys.stdout.write(" - {} seconds".format(time_n-self.time_0))
+                sys.stdout.flush()
+                self.next_progress += 1
                 
     def stop(self):
-        if self.stopped == False:
+        if not self.stopped:
             sys.stdout.write("\r - 100 %\n")
             self.stopped = True
-            if self.timed:
-                time_n = time()
-                sys.stdout.write(" taking {} seconds.\n".format(time_n-self.time_0))
+#             if self.timed:
+#                 time_n = time()
+#                 sys.stdout.write(" taking {} seconds.\n".format(time_n-self.time_0))
             sys.stdout.flush()
-#         elif self.timed:
-#             time_n = time()
-#             sys.stdout.write(" - {} seconds overall ...".format(time_n-self.time_0))
 
 def recast_var(var, object):
     #Return var recast into object's type
