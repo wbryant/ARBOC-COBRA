@@ -33,7 +33,7 @@ def count_lines(filename):
     num_lines = 0
      
     f_in = open(filename, 'r')
-    for line in f_in:
+    for _ in f_in:
         num_lines += 1
     
     f_in.close()
@@ -155,7 +155,7 @@ class loop_counter:
                 self.stop()
             elif (((100 * self.num_done) / self.length) > self.next_progress):
                 if self.length > 100:
-                    sys.stdout.write("\r - %d %%  (%d / %d)" % (self.next_progress, sel.num_done, self.length))
+                    sys.stdout.write("\r - %d %%  (%d / %d)" % (self.next_progress, self.num_done, self.length))
                 else:
                     percent_done = int(100*self.num_done/float(self.length))
                     sys.stdout.write("\r - %d %%  (%d / %d)" % (percent_done, self.num_done, self.length))
@@ -174,9 +174,9 @@ class loop_counter:
 #                 sys.stdout.write(" taking {} seconds.\n".format(time_n-self.time_0))
             sys.stdout.flush()
 
-def recast_var(var, object):
+def recast_var(var, object_to_change):
     #Return var recast into object's type
-    obj_type = str(type(object)).split("'")[1]
+    obj_type = str(type(object_to_change)).split("'")[1]
     if obj_type == 'int':
         return int(var)
     elif obj_type == 'float':
