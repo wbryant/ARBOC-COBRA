@@ -15,6 +15,9 @@ from abcsmc import create_extended_model
 from local_gene_parser import gene_parser
 from annotation.models import Reaction
 
+def mean(obj_list):
+    return sum(obj_list)/float(len(obj_list))
+
 def infer_rel_list(model_file):
     """Infer the list of RELs from an SBML file, preferring MNX IDs where possible."""
     
@@ -268,10 +271,12 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
         dict_append(cogzyme_enzyme_dict, enzyme_cogs, gene_set)
         
     
-    rel_model_mean_scores = {}
-    rel_pred_mean_scores = {}
-    rel_model_min_scores = {}
-    rel_pred_min_scores = {}
+    all_model_mean_scores = {}
+    all_pred_mean_scores = {}
+    all_model_min_scores = {}
+    all_pred_min_scores = {}
+    mean_ratios = []
+    min_ratios = []
     
     counter = loop_counter(len(valid_rel_list), "Inferring predicted enzymes from REL list")
     for rel in valid_rel_list:
@@ -302,35 +307,31 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
         if rel_enzyme not in enzyme_list:
             enzyme_list.append(rel_enzyme)
         
-        found_predictions = False
         for enzyme in enzyme_list:
             if len(enzyme) > 1:
                 gene_pair_scores = get_enzyme_scores(enzyme, relatedness_dict)
                 if set(enzyme) in enzymes_in_model:
-                    dict_append(rel_model_mean_scores, len(enzyme), sum(gene_pair_scores)/float(len(gene_pair_scores)))
-                    dict_append(rel_model_min_scores, len(enzyme), min(gene_pair_scores))
+                    dict_append(all_model_mean_scores, len(enzyme), sum(gene_pair_scores)/float(len(gene_pair_scores)))
+                    dict_append(all_model_min_scores, len(enzyme), min(gene_pair_scores))
                     model_mean_scores.append(sum(gene_pair_scores)/float(len(gene_pair_scores)))
                     model_min_scores.append(min(gene_pair_scores))
                 else:
-                    found_predictions=True
-                    dict_append(rel_pred_mean_scores, len(enzyme), sum(gene_pair_scores)/float(len(gene_pair_scores)))
-                    dict_append(rel_pred_min_scores, len(enzyme), min(gene_pair_scores))
+                    dict_append(all_pred_mean_scores, len(enzyme), sum(gene_pair_scores)/float(len(gene_pair_scores)))
+                    dict_append(all_pred_min_scores, len(enzyme), min(gene_pair_scores))
                     pred_mean_scores.append(sum(gene_pair_scores)/float(len(gene_pair_scores)))
                     pred_min_scores.append(min(gene_pair_scores))
         counter.step()
-    
-        if found_predictions:
-            ## Test ratio of mean score and min score - does 'model' enzyme do better than predicted models
-            pass
-#             print " - In model average mean:", sum(model_mean_scores)/len(model_mean_scores) 
-#             print " - NI model average mean:", sum(pred_mean_scores)/len(pred_mean_scores)
-#             print " - In model average min:", sum(model_min_scores)/len(model_min_scores)
-#             print " - NI model average min:", sum(pred_min_scores)/len(pred_min_scores)
         
     counter.stop()
-    output_answers = [rel_model_min_scores, rel_pred_min_scores, rel_model_mean_scores, rel_pred_mean_scores]
+    output_answers = {
+        'all_model_min_scores': all_model_min_scores,
+        'all_pred_min_scores': all_pred_min_scores,
+        'all_model_mean_scores': all_model_mean_scores,
+        'all_pred_mean_scores': all_pred_mean_scores,
+    }
      
     return output_answers
+
 
 def get_enzyme_scores_for_model(model_file=None, taxonomy_id=None, string_file=None, cog_file=None):
     model_file=model_file or "/Users/wbryant/git/incognito/static/models/BTH_iAH991_w_gprs.xml"
@@ -355,6 +356,15 @@ def get_enzyme_scores_for_model(model_file=None, taxonomy_id=None, string_file=N
     return results
     
 def report_on_results(results):
+    
+    if 'mean_ratios' in results:
+        mean_ratios = results['mean_ratios']
+        print "Average ratio of model/prediction mean enzyme scores is", mean(mean_ratios)
+    
+    if 'min_ratios' in results:
+        min_ratios = results['min_ratios']
+        print "Average ratio of model/prediction minimum gene-gene enzyme scores is", mean(min_ratios)
+    
     return None
 
 def collate_results_sets(results_set_list):
