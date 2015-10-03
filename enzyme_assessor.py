@@ -4,7 +4,7 @@ Created on 20 Sep 2015
 @author: wbryant
 '''
 
-import re
+import re, sys
 from itertools import combinations, product, chain
 from local_utils import dict_append, preview_dict, loop_counter
 from random import randrange
@@ -14,6 +14,10 @@ from copy import deepcopy
 from abcsmc import create_extended_model
 from local_gene_parser import gene_parser
 from annotation.models import Reaction
+
+from statsmodels.api import Logit
+from scipy.misc import comb
+from pandas import qcut
 
 def mean(obj_list):
     return sum(obj_list)/float(len(obj_list))
@@ -25,6 +29,7 @@ def infer_rel_list(model_file):
     
     rel_list = []
     counter = loop_counter(len(model.reactions), "Running through model reactions")
+    gene_list = []
     for reaction in model.reactions:
         model_rxn_id = re.sub('(\_enz\d*)*$','',reaction.id)
         db_reactions = Reaction.objects.filter(reaction_synonym__synonym=model_rxn_id).distinct()
@@ -35,9 +40,13 @@ def infer_rel_list(model_file):
         for enzyme in gene_parser(reaction.gene_reaction_rule):
             if ((len(enzyme) > 0) & (enzyme != '0000000.0.peg.0')):
                 rel_list.append((reaction_id, enzyme))
+                genes = enzyme.split(",")
+                for gene in genes:
+                    gene_list.append(gene)
         counter.step()
     counter.stop()
-    return rel_list
+    gene_list = list(set(gene_list))
+    return rel_list, gene_list
 
 def load_string_data(string_file=None, taxonomy_id=None):
     """Import String DB data from a single file; it must be of a single organism or risks getting confused.""" 
@@ -206,7 +215,7 @@ def add_gene(target_enzyme_cogs, gene_cog_dict, cog_gene_dict, proposed_enzyme =
 def load_cog_data(taxonomy_id, rel_list, cog_member_file=None):
     """Get all relevant gene-COG relationships from member file (eggNOG 4.1)."""
     
-    cog_member_file=cog_member_file or "/Users/wbryant/work/data/NOG/NOG.members.tsv"
+    cog_member_file=cog_member_file or "/Users/wbryant/work/data/NOG/NOG.members_adapted.tsv"
     cog_gene_dict = {}
     gene_cog_dict = {}
     
@@ -221,7 +230,7 @@ def load_cog_data(taxonomy_id, rel_list, cog_member_file=None):
         for entry in re.findall(organism_query, cog_members):
             
             gene = entry[1]
-            #print "Gene:", gene
+            #print "Gene:", gene, "COG:", cog
             dict_append(gene_cog_dict, gene, cog)
             dict_append(cog_gene_dict, cog, gene)
     f_in.close()
@@ -239,16 +248,42 @@ def load_cog_data(taxonomy_id, rel_list, cog_member_file=None):
     return gene_cog_dict, cog_gene_dict
 
 
-def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_file=None):           
+def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, operon_dict, gene_cog_dict_in, cog_gene_dict_in, max_preds_per_rel=None):           
     """Enumerate and test every COGzyme-produced enzyme prediction against curated enzymes."""
+
+#     print("Gene-cog dict: {}".format(len(gene_cog_dict_in)))
+#     preview_dict(gene_cog_dict_in, 20)
+#     
+#     print("Cog-gene dict: {}".format(len(cog_gene_dict_in)))
+#     preview_dict(cog_gene_dict_in, 20)
+
+    ## Check all genes for presence in Operon data (currently used as the standard)
+    gene_cog_dict = {} 
+    cog_gene_dict = {}
+    for gene, coglist in gene_cog_dict_in.iteritems():
+        if gene in operon_dict:
+            gene_cog_dict[gene] = coglist
+    for cog, genelist in cog_gene_dict_in.iteritems():
+        for gene in genelist:
+            if gene not in operon_dict:
+                genelist.remove(gene)
+        if len(genelist) > 0:
+            cog_gene_dict[cog] = genelist
     
-    cog_membership_file=cog_membership_file or "/Users/wbryant/work/data/NOG/NOG.members.tsv"
-    
-    gene_cog_dict, cog_gene_dict = load_cog_data(taxonomy_id, rel_list, cog_membership_file)
+#     print("Gene-cog dict: {}".format(len(gene_cog_dict)))
+#     preview_dict(gene_cog_dict, 20)
+#     
+#     print("Cog-gene dict: {}".format(len(cog_gene_dict)))
+#     preview_dict(cog_gene_dict, 20)
     
     ## Establish which enzymes from each COGzyme are in the model
     cogzyme_enzyme_dict = {}
     valid_rel_list = []
+    max_preds_per_rel=max_preds_per_rel or 100
+    
+    
+    print("There are {} RELs".format(len(rel_list)))
+    num_rels_failed = 0
     for rel in rel_list:
         gene_list = rel[1].split(",")
         if len(gene_list) == 1:
@@ -260,6 +295,9 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
             if len(gene_cogs) > 0:    
                 cog_list.extend(gene_cogs)
             else:
+                num_rels_failed += 1
+                #print "REL:", rel
+                #print(" - gene '{}' not found".format(gene))
                 non_cog_gene=True
                 break
         if non_cog_gene:
@@ -269,7 +307,8 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
         enzyme_cogs = frozenset(cog_list)
         gene_set = set(gene_list)
         dict_append(cogzyme_enzyme_dict, enzyme_cogs, gene_set)
-        
+    
+    print("{} RELs failed".format(num_rels_failed))
     
     all_model_mean_scores = {}
     all_pred_mean_scores = {}
@@ -278,7 +317,12 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
     mean_ratios = []
     min_ratios = []
     
-    counter = loop_counter(len(valid_rel_list), "Inferring predicted enzymes from REL list")
+    all_min_scores = {}
+    all_mean_scores = {}
+    dataset = []
+    all_enzymes_found = []
+    
+    counter = loop_counter(len(valid_rel_list), "Inferring predicted enzymes from REL list ({})".format(len(valid_rel_list)))
     for rel in valid_rel_list:
 #         print "\nREL:", rel
         
@@ -298,28 +342,74 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
         model_min_scores = []
         pred_min_scores = []
         
+        ## Cutoff for huge COGzymes - nothing useful from them as far too many predictions
         enzyme_list = []
+        num_preds = 0
+        too_many_preds=False
         for enzyme in add_gene(target_enzyme_cogs, gene_cog_dict, cog_gene_dict):
             enzyme_list.append(set(enzyme))
-            
-        rel_enzyme = set(gene_list)
+            num_preds += 1
+            if num_preds > max_preds_per_rel:
+                too_many_preds=True
+                break
+        if too_many_preds:
+            continue
         
+        ## Check that original enzyme is in list
+        rel_enzyme = set(gene_list)
         if rel_enzyme not in enzyme_list:
             enzyme_list.append(rel_enzyme)
         
+        ## Do scoring
         for enzyme in enzyme_list:
-            if len(enzyme) > 1:
+            enzyme_length = len(enzyme)
+            enzyme_orig = deepcopy(enzyme)
+            if enzyme_length > 1:
+                    
                 gene_pair_scores = get_enzyme_scores(enzyme, relatedness_dict)
+                try:
+                    mean_score = sum(gene_pair_scores)/float(len(gene_pair_scores))
+                except:
+                    print enzyme
+                    print enzyme_length
+                    print gene_pair_scores
+                    mean_score = sum(gene_pair_scores)/float(len(gene_pair_scores))
+                    
+                min_score = min(gene_pair_scores)
+                
                 if set(enzyme) in enzymes_in_model:
-                    dict_append(all_model_mean_scores, len(enzyme), sum(gene_pair_scores)/float(len(gene_pair_scores)))
-                    dict_append(all_model_min_scores, len(enzyme), min(gene_pair_scores))
-                    model_mean_scores.append(sum(gene_pair_scores)/float(len(gene_pair_scores)))
-                    model_min_scores.append(min(gene_pair_scores))
+                    present_in_model = 1
+                    dict_append(all_model_mean_scores, enzyme_length, mean_score)
+                    dict_append(all_model_min_scores, enzyme_length, min_score)
+                    model_mean_scores.append(mean_score)
+                    model_min_scores.append(min_score)
+                    dict_append(all_min_scores, enzyme_length, (min_score, 1))
+                    dict_append(all_mean_scores, enzyme_length, (mean_score, 1))
                 else:
-                    dict_append(all_pred_mean_scores, len(enzyme), sum(gene_pair_scores)/float(len(gene_pair_scores)))
-                    dict_append(all_pred_min_scores, len(enzyme), min(gene_pair_scores))
-                    pred_mean_scores.append(sum(gene_pair_scores)/float(len(gene_pair_scores)))
-                    pred_min_scores.append(min(gene_pair_scores))
+                    present_in_model = 0
+                    dict_append(all_pred_mean_scores, enzyme_length, mean_score)
+                    dict_append(all_pred_min_scores, enzyme_length, min_score)
+                    pred_mean_scores.append(mean_score)
+                    pred_min_scores.append(min_score)
+                    dict_append(all_min_scores, enzyme_length, (min_score, 0))
+                    dict_append(all_mean_scores, enzyme_length, (mean_score, 0))
+                
+                if enzyme not in all_enzymes_found: 
+                    all_enzymes_found.append(enzyme)
+                    operon_memberships = []
+                    for gene in list(enzyme):
+                        try:
+                            operon_memberships.append(operon_dict[gene])
+                        except:
+                            print rel, enzyme, enzyme_orig, gene, "\n"
+                            operon_memberships.append(operon_dict[gene])
+                    operon_score = 0 
+                    for member1 in range(enzyme_length):
+                        for member2 in range(member1+1, enzyme_length):
+                            if operon_memberships[member1] == operon_memberships[member2]:
+                                operon_score += 1
+                    dataset.append([mean_score, min_score, enzyme_length, operon_score/comb(enzyme_length,2), present_in_model])
+                
         counter.step()
         
     counter.stop()
@@ -328,32 +418,66 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, cog_membership_f
         'all_pred_min_scores': all_pred_min_scores,
         'all_model_mean_scores': all_model_mean_scores,
         'all_pred_mean_scores': all_pred_mean_scores,
+        'all_min_scores': all_min_scores,
+        'all_mean_scores': all_mean_scores,
+        'dataset': dataset
     }
      
     return output_answers
 
-
-def get_enzyme_scores_for_model(model_file=None, taxonomy_id=None, string_file=None, cog_file=None):
-    model_file=model_file or "/Users/wbryant/git/incognito/static/models/BTH_iAH991_w_gprs.xml"
-    cog_file=cog_file or "/Users/wbryant/work/data/NOG/NOG.members.tsv"
-    string_file=string_file or '/Users/wbryant/work/BTH/data/stringdb/226186.protein.links.v10.txt'
-    taxonomy_id=taxonomy_id or '226186'
-        
-    print "Inferring REL list ..."
-    model_rel_list = infer_rel_list(model_file)
+def load_operon_data(operon_data_file):
     
-    print "Inferring relatedness dictionary ..."
-    relatedness_dict, gene_scores_dict = load_string_data(string_file)
+    operon_membership_dict = {}
+    
+    f_in = open(operon_data_file, 'r')
+    for line in f_in:
+        try:
+            cols = line.strip().split("\t")
+            operon_id = int(cols[0])
+            gene_locus_tag = cols[2]
+            operon_membership_dict[gene_locus_tag] = operon_id
+        except:
+            pass
+    f_in.close()
+    return operon_membership_dict
+    
+
+def get_enzyme_scores_for_model(model_file=None, taxonomy_id=None, string_file=None, cog_file=None, operon_file=None, model_rel_list=None, relatedness_dict=None):
+    model_file=model_file or "/Users/wbryant/git/incognito/static/models/BTH_iAH991_w_gprs.xml"
+    cog_file=cog_file or "/Users/wbryant/work/data/NOG/NOG.members_adapted.tsv"
+    string_file=string_file or '/Users/wbryant/work/BTH/data/stringdb/226186.protein.links.v10.txt'
+    operon_file=operon_file or "/Users/wbryant/work/BTH/data/proopdb/bth_operon_predictions.txt"
+    taxonomy_id=taxonomy_id or '226186'
+    model_rel_list=model_rel_list or None
+    relatedness_dict=relatedness_dict or None
+    
+    if not model_rel_list:
+        print "Inferring REL list ..."
+        model_rel_list, _ = infer_rel_list(model_file)
+    else:
+        print("REL list given ...")
+    
+    if not relatedness_dict:
+        print "Inferring relatedness dictionary ..."
+        relatedness_dict, gene_scores_dict = load_string_data(string_file)
+    else:
+        print("Relatedness dictionary given ...")
+
+    print("Loading COG data ...")
+    gene_cog_dict, cog_gene_dict = load_cog_data(taxonomy_id, model_rel_list, cog_file)
+    
+    print("Importing operon data ...")
+    operon_dict = load_operon_data(operon_file)
     
     print "Inferring COGzyme enzymes and scoring ..."
-    results = benchmark_cogzymes(model_rel_list, relatedness_dict, taxonomy_id)
+    results = benchmark_cogzymes(model_rel_list, relatedness_dict, taxonomy_id, operon_dict, gene_cog_dict, cog_gene_dict)
     
 #     for dict in results:
 #         print ""
 #         for num_genes, scores in dict.iteritems():
 #             print num_genes,len(scores), sum(scores)/len(scores)
         
-    return results
+    return results, model_rel_list, relatedness_dict
     
 def report_on_results(results):
     
@@ -367,9 +491,40 @@ def report_on_results(results):
     
     return None
 
-def collate_results_sets(results_set_list):
-    return None
-
+def solve_logit_fixed_var(dataset, fixed_var, value, target_var=None):
+    """Take 'dataset' and for a particular 'value' of 'fixed_col' do logistic regression."""
+    
+    target_var=target_var or 'Enzyme'
+    training_cols= [col for col in dataset.columns[:]]
+    try:
+        training_cols.remove(target_var)
+        training_cols.remove(fixed_var)
+    except:
+        print("Column names could not be found")
+        sys.exit(1)
+        
+        
+    selected_dataset=dataset[dataset[fixed_var] == value]
+    logit = Logit(selected_dataset[target_var],selected_dataset[training_cols])
+    result = logit.fit(method="bfgs")
+    return result, selected_dataset
+    
+def get_qcut_bin_centres(column, num_bins):
+    """Use a quantile binning, and return the mid-points of each bin as a list."""
+    
+    _, edges = qcut(column, num_bins, retbins=True)
+    bin_centres = []
+    for idx, _ in enumerate(edges[1:]):
+        centre = (edges[idx+1] + edges[idx])/float(2)
+        bin_centres.append(centre)
+    
+    return bin_centres
+    
+     
+    
+    
+    
+    
     
     
     
