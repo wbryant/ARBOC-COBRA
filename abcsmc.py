@@ -413,6 +413,7 @@ class AbcProblem():
             idx += 1
             self.prior_set[idx] = prior_value
             self.model.theta_rxn_map[idx] = self.model.reactions.get_by_id(rxn_id)
+        self.prior_estimate = deepcopy(self.prior_set)
         
         ## Create original lb/ub vars for reference
         for rxn in self.model.reactions:
@@ -487,7 +488,8 @@ class AbcProblem():
             self.num_expts_neg,
             self.ln_pi_max,
             self.precalc_media,
-            self.precalc_media_frozensets)
+            self.precalc_media_frozensets,
+            self.prior_estimate)
         
         return particle
     
@@ -507,8 +509,17 @@ class AbcProblem():
         self.thetas_selected.append(proposed_theta_idx_set)
         self.intermediate_theta_dict[self.t] = theta_accepted_set
         self.theta_set_prev = deepcopy(theta_accepted_set)   
-        self.ln_w_accepted_set = ln_w_accepted_set     
+        self.ln_w_accepted_set = ln_w_accepted_set
+        self.create_prior_estimate()     
+     
+    def create_prior_estimate(self):
+        """Use theta_accepted_set to estimate new prior for determining transition probabilities."""
         
+        self.prior_estimate = []
+        rxn_presence = zip(*self.results_theta[-1])
+        for rxn in rxn_presence:
+            rxn_prior = sum(rxn)/float(len(rxn))
+            self.prior_estimate.append(rxn_prior)
         
     def step_forwards(self):
         """Increment time and calculate new problem parameters."""
@@ -593,7 +604,8 @@ class Particle():
             num_expts_neg,
             ln_pi_max,
             precalc_media,
-            precalc_media_frozensets):
+            precalc_media_frozensets,
+            prior_estimate):
          
         self.theta_set_prev = theta_set_prev
         self.w_set_prev = w_set_prev
@@ -610,6 +622,7 @@ class Particle():
         self.ln_pi_max = ln_pi_max
         self.precalc_media = precalc_media
         self.precalc_media_frozensets = precalc_media_frozensets
+        self.prior_estimate = prior_estimate
         
         self.num_params = len(prior_set)
          
@@ -675,6 +688,26 @@ class Particle():
                 n_diff_min = n_diff
         self.n_diff_res = [n_diff - n_diff_min for n_diff in n_diff_list]
         self.n_diff_min = n_diff_min
+    
+    def calculate_ln_weight_denominator_modified(self):
+        """Calculate the logarithm of the weighted sum of the K_ts for the 
+        calculation of weight.
+        
+        For the modified K_t, the shortcut leveraging the fact that all transition 
+        probabilities are the same does not work so all must be calculated sequentially."""
+        
+        p = self.p_transition
+        
+        weighted_sum = 0
+        for w_j, theta_j in zip(self.w_set_prev, self.theta_set_prev):
+            weighted_residual = w_j * self.K_t_modified(theta_j)
+            weighted_sum += weighted_residual
+        
+        try:
+            self.ln_weight_denominator = n_diff_res*(ln(p) + ln(1-p)) + ln(weighted_sum)
+        except:
+            print("This particle is so distant from every other particle that it has underflown, it will take the maximum value of the weights of the other particles in the population")
+            self.ln_weight_denominator = None
     
     def calculate_ln_weight_denominator(self):
         """Calculate the logarithm of the weighted sum of the K_ts for the 
@@ -743,12 +776,73 @@ class Particle():
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
+    
+    def perturb_param_using_prior(self, idx):
+        """Return p_transition based on current prior estimate for REL idx."""
+        
+        rel_prior = self.prior_estimate[idx]
+        if rel_prior > 0.95:
+            rel_prior = 0.95
+        if rel_prior < 0.05:
+            rel_prior = 0.05
+        
+        param_perturbed = np.random.binomial(1,rel_prior)
+        return param_perturbed
+
+    def param_p_sourced(self,idx,param,param_previous):
+        """Return the probability of a parameter having come from a previous parameter given a pertubation."""
+
+        r_p = self.prior_estimate[idx]
+        p_t = self.p_transition
+        
+        if r_p > 0.95:
+            r_p = 0.95
+        if r_p < 0.05:
+            r_p = 0.05        
  
+        if (param == 1) & (param_previous == 1):
+            return p_t*r_p + 1-p_t
+        if (param == 1) & (param_previous == 0):
+            return p_t*r_p
+        if (param == 0) & (param_previous == 1):
+            return p_t*(1-r_p)
+        if (param == 0) & (param_previous == 0):
+            return p_t*(1-r_p) + 1-p_t
+            
+    def K_t_modified(self, theta_previous = None):
+        """Perturbation function based on current estimated priors for reaction presence parameters. 
+         
+        Return a perturbed theta, theta_perturbed, from theta_sampled according to a modified distribution."""
+        
+        if theta_previous is None:
+            ## Perturb the parameter set self.theta_sampled
+            theta_perturbed = np.zeros(len(self.theta_sampled))
+            for idx, param_sampled in enumerate(self.theta_sampled):
+                if random() < self.p_transition:
+                    param_perturbed = self.perturb_param_using_prior(idx)
+                else:
+                    param_perturbed = param_sampled
+                theta_perturbed[idx] = param_perturbed 
+            return theta_perturbed
+        else:
+            ## Output the probability of a transition to self.theta_sampled from theta_previous    
+            #added_thetas = self.theta_accepted + theta_previous
+            probability = 1.0
+            ln_p = 0
+            for idx, param in enumerate(self.theta_accepted):
+                p_transition = self.param_p_sourced(idx, param,theta_previous[idx])
+                ln_p += ln(p_transition)
+                probability *= p_transition
+            return probability, ln_p
+        
+    
     def K_t(self, theta_previous = None):
         """Perturbation function!
          
         Return a perturbed theta, theta_perturbed, from theta_sampled according to a simple distribution."""
-         
+        
+        
+        
         if theta_previous is None:
             ## Perturb the parameter set self.theta_sampled
             theta_perturbed = np.zeros(len(self.theta_sampled))

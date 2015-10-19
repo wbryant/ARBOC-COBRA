@@ -39,7 +39,7 @@ def infer_rel_list(model_file):
             reaction_id = model_rxn_id   
         for enzyme in gene_parser(reaction.gene_reaction_rule):
             if ((len(enzyme) > 0) & (enzyme != '0000000.0.peg.0')):
-                rel_list.append((reaction_id, enzyme))
+                rel_list.append((reaction_id, enzyme, reaction.source))
                 genes = enzyme.split(",")
                 for gene in genes:
                     gene_list.append(gene)
@@ -326,6 +326,8 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, operon_dict, gen
     for rel in valid_rel_list:
 #         print "\nREL:", rel
         
+        rel_source=rel[2]
+        
         gene_list = rel[1].split(",")
         
         ## Establish COGzyme
@@ -408,7 +410,7 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, operon_dict, gen
                         for member2 in range(member1+1, enzyme_length):
                             if operon_memberships[member1] == operon_memberships[member2]:
                                 operon_score += 1
-                    dataset.append([mean_score, min_score, enzyme_length, operon_score/comb(enzyme_length,2), present_in_model])
+                    dataset.append([mean_score, min_score, enzyme_length, operon_score/comb(enzyme_length,2), present_in_model,rel_source])
                 
         counter.step()
         
@@ -519,12 +521,3 @@ def get_qcut_bin_centres(column, num_bins):
         bin_centres.append(centre)
     
     return bin_centres
-    
-     
-    
-    
-    
-    
-    
-    
-    
