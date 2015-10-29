@@ -30,6 +30,44 @@ def infer_rel_list(model_file):
     rel_list = []
     counter = loop_counter(len(model.reactions), "Running through model reactions")
     gene_list = []
+    model_rxn_ids = []
+    for reaction in model.reactions:
+        model_rxn_id = re.sub('(\_enz\d*)*$','',reaction.id)
+        model_rxn_ids.append(model_rxn_id)
+    db_reaction_data = Reaction.objects.filter(reaction_synonym__synonym__in=model_rxn_ids).values_list('reaction_synonym__synonym','name')
+    db_reaction_dict = {}
+    for item in db_reaction_data:
+        dict_append(db_reaction_dict, item[0], item[1], ignore_duplicates=True)    
+    
+    for reaction in model.reactions:
+        model_rxn_id = re.sub('(\_enz\d*)*$','',reaction.id)
+        try:
+            db_reactions_specific = db_reaction_dict[model_rxn_id]
+        except:
+            db_reactions_specific = ''
+        if len(db_reactions_specific) == 1:
+            reaction_id = db_reactions_specific[0]
+        else:
+            reaction_id = model_rxn_id   
+        for enzyme in gene_parser(reaction.gene_reaction_rule):
+            if ((len(enzyme) > 0) & (enzyme != '0000000.0.peg.0')):
+                rel_list.append((reaction_id, enzyme, reaction.source))
+                genes = enzyme.split(",")
+                for gene in genes:
+                    gene_list.append(gene)
+        counter.step()
+    counter.stop()
+    gene_list = list(set(gene_list))
+    return rel_list, gene_list
+
+def infer_rel_list_slow(model_file):
+    """Infer the list of RELs from an SBML file, preferring MNX IDs where possible."""
+    
+    model = create_extended_model(model_file, require_solver=False)
+    
+    rel_list = []
+    counter = loop_counter(len(model.reactions), "Running through model reactions")
+    gene_list = []
     for reaction in model.reactions:
         model_rxn_id = re.sub('(\_enz\d*)*$','',reaction.id)
         db_reactions = Reaction.objects.filter(reaction_synonym__synonym=model_rxn_id).distinct()
@@ -243,7 +281,9 @@ def load_cog_data(taxonomy_id, rel_list, cog_member_file=None):
     all_genes_in_rels = list(set(all_genes_in_rels))
     for gene in all_genes_in_rels:
         if gene not in gene_cog_dict:
+            print("Gene not found in NOG file: '{}'".format(gene))
             gene_cog_dict[gene] = []
+            print(" -> dict entry: '{}'".format(gene_cog_dict[gene]))
     
     return gene_cog_dict, cog_gene_dict
 
