@@ -281,9 +281,9 @@ def load_cog_data(taxonomy_id, rel_list, cog_member_file=None):
     all_genes_in_rels = list(set(all_genes_in_rels))
     for gene in all_genes_in_rels:
         if gene not in gene_cog_dict:
-            print("Gene not found in NOG file: '{}'".format(gene))
+            #print("Gene not found in NOG file: '{}'".format(gene))
             gene_cog_dict[gene] = []
-            print(" -> dict entry: '{}'".format(gene_cog_dict[gene]))
+            #print(" -> dict entry: '{}'".format(gene_cog_dict[gene]))
     
     return gene_cog_dict, cog_gene_dict
 
@@ -331,7 +331,10 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, operon_dict, gen
         cog_list = []
         non_cog_gene=False
         for gene in gene_list:
-            gene_cogs = gene_cog_dict[gene]
+            try:
+                gene_cogs = gene_cog_dict[gene]
+            except:
+                gene_cogs = []
             if len(gene_cogs) > 0:    
                 cog_list.extend(gene_cogs)
             else:

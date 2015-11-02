@@ -6,6 +6,8 @@ Created on 10 Dec 2014
 
 import sys
 from time import time
+import re
+from annotation.models import Reaction
 
 def preview_dict(in_dict, limit = 10):
     num_shown = 0
