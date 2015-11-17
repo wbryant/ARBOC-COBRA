@@ -373,6 +373,8 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, operon_dict, gen
         
         gene_list = rel[1].split(",")
         
+        reaction = rel[0]
+        
         ## Establish COGzyme
         cog_list = []
         for gene in gene_list:
@@ -453,7 +455,7 @@ def benchmark_cogzymes(rel_list, relatedness_dict, taxonomy_id, operon_dict, gen
                         for member2 in range(member1+1, enzyme_length):
                             if operon_memberships[member1] == operon_memberships[member2]:
                                 operon_score += 1
-                    dataset.append([mean_score, min_score, enzyme_length, operon_score/comb(enzyme_length,2), present_in_model,rel_source])
+                    dataset.append([reaction,",".join(sorted(enzyme)), mean_score, min_score, enzyme_length, operon_score/comb(enzyme_length,2), present_in_model,rel_source])
                 
         counter.step()
         

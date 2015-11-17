@@ -382,10 +382,9 @@ class AbcProblem():
                 prior_dict[details[0]] = float(details[1])
             f_in.close()
         
+        ## Split all included reactions into individual enzyme/reaction pairs
         if abc_reactions:
-            ## Split all included reactions into individual enzyme/reaction pairs
             counter = loop_counter(len(abc_reactions),'Splitting ABC reactions')
-            
             for rxn_id in abc_reactions:        
                 counter.step()
                 enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
@@ -398,14 +397,13 @@ class AbcProblem():
                     prior_dict[enzrxn_id] = prior_value
                 if non_enz_rxn_id:
                     prior_dict[non_enz_rxn_id] = self.default_prior_value
-                
             counter.stop()
         
         ## Apply belief about rxn/gene/enzyme relationships
         prior_dict = self.set_rxn_enz_priors(rxn_enz_priors, prior_dict)
         
         ## All beliefs about reactions included in the model are now in prior_dict.
-#         ## Any reaction not in prior_dict is not in the ABC and should always be included.
+        ## Any reaction not in prior_dict is not in the ABC and should always be included.
         self.prior_set = np.ones(len(prior_dict))
         self.model.theta_rxn_map = {}
         idx = -1
