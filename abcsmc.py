@@ -4,6 +4,7 @@ Created on 10 Mar 2014
 @author: wbryant
 '''
 import re, sys
+from cobra.flux_analysis import variability
 from cobra.core.Model import Model
 from cobra.core import ArrayBasedModel
 try:
@@ -315,7 +316,7 @@ class AbcProblem():
         print("Loading experiments ...")
         if experiments_file:
             self.experiments = import_expt_data(self.model, objective_id = biomass_id, data_file=experiments_file)
-        elif experiments:
+        elif experiments is not None:
             self.experiments = experiments
         else:
             print("Experiments not specified, exiting ...")
@@ -1176,6 +1177,12 @@ def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_so
         ecm_model.change_objective(objective_id)
     except:
         print("Objective could not be set ...")
+    
+#    for rxn in ecm_model.reactions:
+#        newID = re.sub('\_LPAREN\_','(',rxn.id)
+#        newID = re.sub('\_RPAREN\_',')',newID)
+#        rxn.id = newID
+    
     return ecm_model    
 
 class ExtendedCobraModel(ArrayBasedModel):
@@ -1395,8 +1402,12 @@ class ExtendedCobraModel(ArrayBasedModel):
 #         sys.stdout.write("\rrunning optimize() ...                         ")    
 #         sys.stdout.flush()
         try:
-            self.optimize(solver='cglpk', time_limit=time_limit)
+            self.optimize(solver=self.solver, time_limit=time_limit)
         except:
+            
+#             print("Optimize failed.")
+#             print("Solver: '{}'".format(self.solver))
+#             print("Time limit: {}".format(time_limit))
             return 0
 
 #         sys.stdout.write("\rfinished running optimize() ...                ")    
@@ -1404,10 +1415,12 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         if self.solution.f:
             if self.solution.f < 0:
+#                 print("Solution less than 0.")
                 return 0
             else:
                 return self.solution.f
         else:
+#             print("No solution.")
             return 0
     
     def set_medium(self,medium_dict=None):
@@ -1688,6 +1701,134 @@ def compare_rel_lists(query_file, ref_file, ignore_genes=['0000000.0.peg.0']):
     results.stats()
     
     return results, r, q
+    
+    
+
+def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose=False):
+    """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
+     
+#         ## Check that the model can run without changes, else return 1
+#         if model.opt() <= 0:
+#             print("Failed on original media")
+#             self.result = 1
+#             return None
+    
+     
+    if debug:
+        sys.stdout.write("\rCreating list of valid experiments ...                           ")    
+        sys.stdout.flush()
+    ## Check all genotypes for presence in model and create a list of valid experiments
+    valid_experiments = []
+    num_pos_remaining = 0
+    num_neg_remaining = 0
+    gene_ids_in_model = model.get_relevant_gene_ids()
+    for expt in experiments:
+        all_genes_present = True
+        for gene in expt.genotype:
+            if gene not in gene_ids_in_model:
+#                     print("Expt {}: '{}' not present in model ...".format(idx+1, gene))
+                all_genes_present = False
+                break
+        if all_genes_present:
+            valid_experiments.append(expt)
+            if expt.result == 1:
+                num_pos_remaining += 1
+            else:
+                num_neg_remaining += 1
+     
+    print("{} valid experiments ...".format(len(valid_experiments)))
+    
+    num_failed_tests = 0
+    num_succeeded_tests = 0 
+    running_results = ResultSet(0,0,0,0)
+        
+    if verbose:
+        print("Beginning tests ...")
+    
+    counter = loop_counter(len(valid_experiments), "Testing experiments")
+    
+    for experiment in valid_experiments:
+        
+        counter.step()
+#             sys.stdout.write("\rTesting experiment {}                                 ".format(idx))
+#             sys.stdout.flush()
+        expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(model)
+        running_results.tp += tp_add
+        running_results.tn += tn_add
+        running_results.fp += fp_add
+        running_results.fn += fn_add
+        
+        if experiment.result == 1:
+            num_pos_remaining -= 1
+        else:
+            num_neg_remaining -= 1
+        
+        
+        if expt_result == 1:
+            num_succeeded_tests += 1
+        if (expt_result != 1) and (expt_result != -2):
+            num_failed_tests += 1
+    
+    counter.stop()
+    num_tests_checked = num_succeeded_tests + num_failed_tests
+    full_results = deepcopy(running_results) 
+    return full_results, num_tests_checked    
+    
+def compare_models(model1, model2):
+    """Compare 2 extended COBRA models."""
+    
+    ## Get reaction lists (all by ID)
+    model1_reactions = []
+    for reaction in model1.reactions:
+        model1_reactions.append(reaction.id)
+    
+    model1_reactions = set(model1_reactions)
+    
+    model2_reactions = []
+    for reaction in model2.reactions:
+        model2_reactions.append(reaction.id)
+    
+    model2_reactions = set(model2_reactions)
+    
+    reactions_only_1 = model1_reactions - model2_reactions
+    
+    if len(reactions_only_1) > 0:
+        print("Reactions only in first model:")
+        for rxn in reactions_only_1:
+            print rxn
+    
+    reactions_only_2 = model2_reactions - model1_reactions
+    
+    if len(reactions_only_2) > 0:
+        print("Reactions only in second model:")
+        for rxn in reactions_only_2:
+            print rxn
+    
+    rxns_both = model1_reactions & model2_reactions
+    
+    print("Reactions in both with differing bounds:\n")
+    for rxn in rxns_both:
+        rm1 = get_reaction(model1, rxn)
+        
+        rm2 = get_reaction(model2, rxn)
+        
+        lb_diff = False
+        ub_diff = False
+        lb = 'same'
+        ub = 'same'
+        
+        
+        if (rm1.lower_bound != rm2.lower_bound):
+            lb_diff = True
+            lb = 'diff'
+             
+        if (rm1.upper_bound != rm2.upper_bound):
+            ub_diff = True
+            ub = 'diff'
+            
+        if ub_diff or lb_diff:
+            print("{:10}\t{}\t{}".format(rxn, ub, lb))
+    
     
 if __name__ == '__main__':
     pass
