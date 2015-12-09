@@ -184,8 +184,7 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file 
                     print("Medium '{}' cannot be set on the model - incorrect component ID?".format(medium_name))
                     for component in medium_components:
                         print (" - {}".format(component))        
-            else:
-                
+            else:   
                 medium_base = details[1]
                 c_source = details[2]
                 genotype = details[3].split(" and ")
@@ -354,7 +353,7 @@ class AbcProblem():
         if self.include_all:
             abc_reactions = []
             for reaction in self.model.reactions:
-                if reaction.id[0:2] != 'EX_':
+                if not reaction.id.startswith('EX_'):
                     abc_reactions.append(reaction.id) 
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
@@ -382,6 +381,9 @@ class AbcProblem():
                     sys.exit(1)
                 prior_dict[details[0]] = float(details[1])
             f_in.close()
+        
+        self.abc_reactions = abc_reactions
+        return None
         
         ## Split all included reactions into individual enzyme/reaction pairs
         if abc_reactions:
@@ -572,17 +574,23 @@ class AbcProblem():
         p_t = self.p_0 - step_size * self.t
         self.p_t = p_t
     
+    def test_theta(self, thetaTest):
+        """Apply a manually defined theta and test against the experiments in 
+        the ABC problem, returning a ResultSet instance with the results in it."""
+        
+        particleTest = self.initialise_particle(0)
+        particleTest.theta_proposed = thetaTest    
+        particleTest.epsilon = 1
+        particleTest.apply_proposed_theta()
+        particleTest.conduct_experiments()
+        return particleTest.full_results
+    
     def export_particle_rels(self, timepoint, particle_index, rel_output_file):
         """Export RELs from any particle from any of the timepoints."""
-        
         f_out = open(rel_output_file,"w")
-        
         ### For reaction in model,
-        
         ###    if theta[t, index] == 1: export RELs 
-        
         ###    elif not in index: export RELs.
-        
         f_out.close()
     
 class Particle():
@@ -914,7 +922,7 @@ class Particle():
             self.model.set_medium(precalc_medium)
             if self.model.opt() <= 0:
                 self.result = 2
-#                 print("Failed on precalc media")
+                print("Failed on precalc media")
                 return None
          
 #         print"No failure, continuing with test"
@@ -1450,9 +1458,8 @@ class ExtendedCobraModel(ArrayBasedModel):
         Find all exchange lower bounds < 0 and print to screen.
         """
         for reaction in self.reactions:
-            if reaction.id[0:3] == "EX_":
+            if reaction.id.startswith("EX_"):
                 ## Exchange reaction, so if lb < 0, print
-                
                 if reaction.lower_bound < 0:
                     reaction_identifier = reaction.name + " (" + reaction.id + ")"
                     print("%45s %5.0f %5.0f" % (reaction_identifier, reaction.lower_bound, reaction.upper_bound))
@@ -1736,7 +1743,7 @@ def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose
             else:
                 num_neg_remaining += 1
      
-    print("{} valid experiments ...".format(len(valid_experiments)))
+    print("\n{} valid experiments ...".format(len(valid_experiments)))
     
     num_failed_tests = 0
     num_succeeded_tests = 0 
