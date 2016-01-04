@@ -711,7 +711,8 @@ class Particle():
             weighted_sum += weighted_residual
         
         try:
-            self.ln_weight_denominator = n_diff_res*(ln(p) + ln(1-p)) + ln(weighted_sum)
+            pass
+#            self.ln_weight_denominator = n_diff_res*(ln(p) + ln(1-p)) + ln(weighted_sum)
         except:
             print("This particle is so distant from every other particle that it has underflown, it will take the maximum value of the weights of the other particles in the population")
             self.ln_weight_denominator = None
@@ -911,6 +912,8 @@ class Particle():
 #             self.result = 1
 #             return None
         
+        opt_cutoff = 1e-5
+        
         self.num_tests_checked = 0
         self.num_tests_total = 0
         
@@ -920,7 +923,7 @@ class Particle():
         ## Must run on all common media before experimental testing
         for precalc_medium in self.precalc_media:
             self.model.set_medium(precalc_medium)
-            if self.model.opt() <= 0:
+            if self.model.opt() <= opt_cutoff:
                 self.result = 2
                 print("Failed on precalc media")
                 return None
@@ -1125,6 +1128,8 @@ class Experiment():
         Calculate whether ec_model is consistent with this experiment.
         """  
         
+        opt_cutoff = 1e-5
+        
         precalc_frozensets = precalc_frozensets or []
         
         ec_model.set_medium(self.medium)
@@ -1153,10 +1158,10 @@ class Experiment():
 #         sys.stdout.write("\rDone optimising ...                               ")    
 #         sys.stdout.flush()        
         
-        if (model_growth > 0) and (self.result > 0):
+        if (model_growth > opt_cutoff) and (self.result > 0):
             tp = 1
             expt_result = 1
-        elif (model_growth == 0) and (self.result == 0):
+        elif (model_growth <= opt_cutoff) and (self.result == 0):
             expt_result = 1
             tn = 1
 #         elif (model_growth < 0):
