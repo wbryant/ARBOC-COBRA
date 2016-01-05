@@ -383,7 +383,6 @@ class AbcProblem():
             f_in.close()
         
         self.abc_reactions = abc_reactions
-        return None
         
         ## Split all included reactions into individual enzyme/reaction pairs
         if abc_reactions:
