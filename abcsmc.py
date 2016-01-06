@@ -1478,8 +1478,11 @@ class ExtendedCobraModel(ArrayBasedModel):
         new_rxn.lower_bound = -1
         new_rxn.upper_bound = 1000
         new_rxn.add_metabolites({compound: -1.0})
-        self.add_reaction(new_rxn)
-        print("Reaction '{}' added to model".format(new_rxn.name))
+        try:
+            self.add_reaction(new_rxn)
+            print("Reaction '{}' added to model".format(new_rxn.name))
+        except:
+            print("Reaction '{}' already exists in model".format(new_rxn.name))
     
     def find_blocked_reaction_components(self, show_not_blocked=False, tol=1e-10):
         """Find those components of the objective reaction that cannot be created in the given conditions."""
