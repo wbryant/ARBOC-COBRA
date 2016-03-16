@@ -1176,13 +1176,13 @@ class Experiment():
 #         print("%3s (%d): %d" % (self.id, self.result, answer))
         return expt_result, tp, tn, fp, fn
         
-def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_solver=True):
+def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_solver=True, solver='cglpk'):
     """Take an ArrayBasedModel and convert to an Extended_Cobra_Model."""
     
     print("Creating extended COBRA model")
     model = create_cobra_model_from_sbml_file(model_file)
     ecm_model = ExtendedCobraModel(model)
-    ecm_model.set_solver(require_solver=require_solver)
+    ecm_model.set_solver(solver, require_solver=require_solver)
     ecm_model.set_medium()
     print("done.")
     try:
@@ -1190,11 +1190,14 @@ def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_so
     except:
         print("Objective could not be set ...")
     
-#    for rxn in ecm_model.reactions:
-#        newID = re.sub('\_LPAREN\_','(',rxn.id)
-#        newID = re.sub('\_RPAREN\_',')',newID)
-#        rxn.id = newID
+    for rxn in ecm_model.reactions:
+        newID = re.sub('_LPAREN_','_',rxn.id)
+        newID = re.sub('_RPAREN_','',newID)
+        newID = re.sub('\(','_',newID)
+        newID = re.sub('\)','',newID)
+        rxn.id = newID
     
+    ecm_model.repair()
     return ecm_model    
 
 class ExtendedCobraModel(ArrayBasedModel):
