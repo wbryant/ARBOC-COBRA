@@ -336,7 +336,6 @@ class AbcProblem():
 #         ## in model.
 #         self.non_enz_prior = 1/float(self.num_rxns)
         
-        
         self.p_0 = p_0
         self.epsilon_0 = epsilon_0
         self.epsilon_T = epsilon_T
@@ -350,11 +349,7 @@ class AbcProblem():
         self.w_set = None
         self.include_all=include_all
         self.default_prior_value=default_prior_value
-        if self.include_all:
-            abc_reactions = []
-            for reaction in self.model.reactions:
-                if not reaction.id.startswith('EX_'):
-                    abc_reactions.append(reaction.id) 
+
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
         self.id_format = "{:0" + id_length + "d}"
@@ -366,10 +361,17 @@ class AbcProblem():
         ## This is for storing the theta sets at each timepoint
         self.intermediate_theta_dict = {}
         
+        if self.include_all:
+            abc_reactions = []
+            for reaction in self.model.reactions:
+                if not reaction.id.startswith('EX_'):
+                    abc_reactions.append(reaction.id) 
+        else:
+            abc_reactions = abc_reactions or []
+        
         print("Loading prior values ...")
         model_reaction_ids = [reaction.id for reaction in self.model.reactions]
-        if not prior_dict:
-            prior_dict = {}
+        prior_dict = {}
         if prior_file:
             f_in = open(prior_file, 'r')
             for line in f_in:
@@ -379,27 +381,32 @@ class AbcProblem():
                     for reaction_id in model_reaction_ids[0:9]:
                         print reaction_id
                     sys.exit(1)
-                prior_dict[details[0]] = float(details[1])
+                try:
+                    prior_dict[details[0]] = float(details[1])
+                except:
+                    prior_dict[details[0]] = self.default_prior_value
             f_in.close()
         
-        self.abc_reactions = abc_reactions
+        for rxn_id, _ in prior_dict.iteritems():
+            abc_reactions.append(rxn_id)
+        abc_reactions = list(set(abc_reactions))
         
-        ## Split all included reactions into individual enzyme/reaction pairs
-        if abc_reactions:
-            counter = loop_counter(len(abc_reactions),'Splitting ABC reactions')
-            for rxn_id in abc_reactions:        
-                counter.step()
-                enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
-                num_enzrxns = len(enzrxn_ids)
-                if rxn_id in prior_dict:
-                    prior_value = prior_dict[rxn_id]/sqrt(float(num_enzrxns))
-                else:
-                    prior_value = default_prior_value/sqrt(float(num_enzrxns))
-                for enzrxn_id in enzrxn_ids:
-                    prior_dict[enzrxn_id] = prior_value
-                if non_enz_rxn_id:
-                    prior_dict[non_enz_rxn_id] = self.default_prior_value
-            counter.stop()
+        ## Split all included reactions into individual enzyme/reaction pairs 
+        ## and assign prior values according to prior_dict
+        counter = loop_counter(len(abc_reactions),'Splitting ABC reactions')
+        for rxn_id in abc_reactions:        
+            counter.step()
+            enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
+            num_enzrxns = len(enzrxn_ids)
+            if rxn_id in prior_dict:
+                prior_value = prior_dict[rxn_id]/sqrt(float(num_enzrxns))
+            else:
+                prior_value = default_prior_value/sqrt(float(num_enzrxns))
+            for enzrxn_id in enzrxn_ids:
+                prior_dict[enzrxn_id] = prior_value
+            if non_enz_rxn_id:
+                prior_dict[non_enz_rxn_id] = self.default_prior_value
+        counter.stop()
         
         ## Apply belief about rxn/gene/enzyme relationships
         prior_dict = self.set_rxn_enz_priors(rxn_enz_priors, prior_dict)
@@ -1237,9 +1244,7 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         rxn = self.reactions.get_by_id(reaction_id)
         gpr_list = self.enzymes_as_gprs(rxn)
-        num_rxns = len(gpr_list)
-        
-        
+                
         if len(gpr_list) > enzyme_limit:
 #             print("Too many enzymes ({}) for reaction {}.".format(len(gpr_list),reaction_id))
             return [rxn.id], None
@@ -1248,7 +1253,7 @@ class ExtendedCobraModel(ArrayBasedModel):
 #             return[rxn.id], rxn.id
         elif len(gpr_list) == 0:
 #             print("Spontaneous reaction: {}.".format(rxn.id))
-            return[rxn.id], None
+            return [rxn.id], None
         
         enzyme_index = 0
         enzrxn_id_list = []
