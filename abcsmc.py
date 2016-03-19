@@ -362,12 +362,16 @@ class AbcProblem():
         self.intermediate_theta_dict = {}
         
         if self.include_all:
+            print("Including all non-exchange reactions")
             abc_reactions = []
             for reaction in self.model.reactions:
                 if not reaction.id.startswith('EX_'):
-                    abc_reactions.append(reaction.id) 
+                    abc_reactions.append(reaction.id)
+            print("\t{} reactions in total".format(len(abc_reactions)))
         else:
             abc_reactions = abc_reactions or []
+        
+        print("Pre-priors: {} reactions included".format(len(abc_reactions)))
         
         print("Loading prior values ...")
         model_reaction_ids = [reaction.id for reaction in self.model.reactions]
@@ -390,6 +394,8 @@ class AbcProblem():
         for rxn_id, _ in prior_dict.iteritems():
             abc_reactions.append(rxn_id)
         abc_reactions = list(set(abc_reactions))
+        
+        print("Post-priors: {} reactions included".format(len(abc_reactions)))
         
         ## Split all included reactions into individual enzyme/reaction pairs 
         ## and assign prior values according to prior_dict
