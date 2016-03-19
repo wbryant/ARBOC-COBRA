@@ -299,8 +299,6 @@ class AbcProblem():
         include_all: if True, include all non-exchange reactions in the ABC
         
         """
-        print("Input to abcsmc: {}".format(include_all))
-        
         self.t = 0
         self.N = particles_per_population
         self.T = num_populations_max
@@ -350,24 +348,19 @@ class AbcProblem():
         self.theta_set = None
         self.w_set = None
         self.include_all=include_all
-        print("Assign to self: {}".format(self.include_all))
-        
-        
         self.default_prior_value=default_prior_value
 
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
         self.id_format = "{:0" + id_length + "d}"
+        
         ## Initialise results variables, for storing run results
         self.results_theta = []
         self.results_w = []
         self.results_d = []
         self.thetas_selected = []
-        ## This is for storing the theta sets at each timepoint
         self.intermediate_theta_dict = {}
         
-        
-        print("Test assignment: {}".format(self.include_all))
         
         if self.include_all:
             print("Including all non-exchange reactions")
