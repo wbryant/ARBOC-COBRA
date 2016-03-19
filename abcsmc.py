@@ -390,7 +390,10 @@ class AbcProblem():
                     prior_dict[details[0]] = float(details[1])
                 except:
                     prior_dict[details[0]] = self.default_prior_value
+                print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
             f_in.close()
+        
+        print("{} in prior_dict".format(len(prior_dict)))
         
         for rxn_id, _ in prior_dict.iteritems():
             abc_reactions.append(rxn_id)
