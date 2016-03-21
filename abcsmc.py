@@ -769,6 +769,7 @@ class Particle():
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
+        count_failed = 0
         print("\nFinding particle:".format(self.t, self.id))
         
         while True:
@@ -795,11 +796,15 @@ class Particle():
                 sys.stdout.flush()
              
             ## If model is close enough to experiments, accept and return theta and calculated weight
-            if self.result < self.epsilon:
-#                 print(" - Attempt successful, returning accepted theta ...")
+            if self.result > 1:
+                count_failed += 1
+            elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
+                print("{} total attempts".format(count_attempts))
+                print("{} failed on precalc".format(count_failed))
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
+            
     
     def perturb_param_using_prior(self, idx):
         """Return p_transition based on current prior estimate for REL idx."""
@@ -919,7 +924,7 @@ class Particle():
                 theta_proposed[idx] = param_value
             return theta_proposed
  
-    def conduct_experiments(self, debug = False, epsilon=None, verbose=False):
+    def conduct_experiments(self, debug=False, epsilon=None, verbose=False):
         """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
          
 #         ## Check that the model can run without changes, else return 1
@@ -941,7 +946,8 @@ class Particle():
             self.model.set_medium(precalc_medium)
             if self.model.opt() <= opt_cutoff:
                 self.result = 2
-                print("Failed on precalc media")
+                if debug:
+                    print("Failed on precalc media")
                 return None
          
 #         print"No failure, continuing with test"
@@ -988,20 +994,15 @@ class Particle():
         for idx, experiment in enumerate(valid_experiments):
             
             counter.step()
-#             sys.stdout.write("\rTesting experiment {}                                 ".format(idx))
-#             sys.stdout.flush()
             expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(self.model, self.precalc_media_frozensets)
             running_results.tp += tp_add
             running_results.tn += tn_add
             running_results.fp += fp_add
-            running_results.fn += fn_add
-            
+            running_results.fn += fn_add            
             if experiment.result == 1:
                 num_pos_remaining -= 1
             else:
                 num_neg_remaining -= 1
-            
-            
             if expt_result == 1:
                 num_succeeded_tests += 1
             if (expt_result != 1) and (expt_result != -2):
@@ -1015,11 +1016,8 @@ class Particle():
                 check_results.tn += num_neg_remaining
                 min_dist = 1 - check_results.balanced_accuracy()
                 if min_dist > self.epsilon:
-#                     print("\nMin dist too high ({}), aborting".format(min_dist))
                     break
-            
-#             print("{}: current bal.acc. = {}".format(idx, running_results.balanced_accuracy()))
-        
+                    
         counter.stop()
         self.num_tests_checked = num_succeeded_tests + num_failed_tests
 
