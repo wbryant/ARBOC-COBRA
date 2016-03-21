@@ -154,7 +154,7 @@ class loop_counter:
         if not self.stopped:
             if self.num_done >= self.length:
                 self.stop()
-            elif (((100 * self.num_done) / self.length) > self.next_progress):
+            elif (((100 * self.num_done) / self.length) >= self.next_progress):
                 if self.length > 100:
                     sys.stdout.write("\r - %d %%  (%d / %d)" % (self.next_progress, self.num_done, self.length))
                 else:
