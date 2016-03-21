@@ -774,6 +774,8 @@ class Particle():
         
         while True:
             count_attempts += 1
+            sys.stdout.write(".")
+            sys.stdout.flush()
             if debug:
                 sys.stdout.write("\nParticle {} (epsilon = {}),                   ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
@@ -801,8 +803,9 @@ class Particle():
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
-                print("{} total attempts".format(count_attempts))
-                print("{} failed on precalc".format(count_failed))
+                sys.stdout.write("\n{} total attempts".format(count_attempts))
+                sys.stdout.write("\n{} failed on precalc".format(count_failed))
+                sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
             
     
