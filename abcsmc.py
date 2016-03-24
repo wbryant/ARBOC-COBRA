@@ -23,6 +23,7 @@ from random import random
 from math import sqrt, log10, ceil, exp
 import shelve
 from collections import Counter
+from time import sleep as wait
 
 def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
 #     sys.stdout.write("\rentered timeout ...                       ")
@@ -79,7 +80,7 @@ def conduct_experiments_single(model, experiments):
                 num_neg_remaining += 1
      
     num_tests_total = len(valid_experiments)
-    print("{} valid experiments ...".format(len(valid_experiments)))
+    print("\n{} valid experiments ...".format(len(valid_experiments)))
     num_failed_tests = 0
     num_succeeded_tests = 0 
     tp = 0
@@ -425,11 +426,13 @@ class AbcProblem():
         ## Any reaction not in prior_dict is not in the ABC and should always be included.
         self.prior_set = np.ones(len(prior_dict))
         self.model.theta_rxn_map = {}
+        rxn_theta_map = {}
         idx = -1
         for rxn_id, prior_value in prior_dict.iteritems():
             idx += 1
             self.prior_set[idx] = prior_value
             self.model.theta_rxn_map[idx] = self.model.reactions.get_by_id(rxn_id)
+            rxn_theta_map[rxn_id] = idx
         self.prior_estimate = deepcopy(self.prior_set)
         
         ## Create original lb/ub vars for reference
@@ -466,7 +469,7 @@ class AbcProblem():
         self.precalc_media = precalc_media
         self.precalc_media_frozensets = precalc_media_lists
         
-        ## FIND ESSENTIAL REACTIONS HERE - for both OPEN media and precalc media
+        ## FIND ESSENTIAL REACTIONS HERE for precalc media
         
         ## For each reaction, find all RELs
         abc_reaction_lists = []
@@ -513,8 +516,18 @@ class AbcProblem():
         count_rxn_lists.stop()
         print(" - {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
         
-        self.abc_reaction_lists = abc_reaction_lists             
-        self.essential_abc_reaction_sets = essential_abc_reaction_sets
+        #self.abc_reaction_lists = abc_reaction_lists             
+        #self.essential_reaction_sets = essential_abc_reaction_sets
+        
+        ## CONVERT REACTION SETS TO THETA SUBSETS
+        essential_theta_sets = []
+        for rxn_list in essential_abc_reaction_sets:
+            theta_indices = []
+            for rxn in rxn_list:
+                theta_indices.append(rxn_theta_map[rxn.id])
+            essential_theta_sets.append(set(theta_indices))
+        
+        self.essential_theta_sets = essential_theta_sets
         
         print("ABC initialisation complete.")
                 
@@ -556,7 +569,8 @@ class AbcProblem():
             self.ln_pi_max,
             self.precalc_media,
             self.precalc_media_frozensets,
-            self.prior_estimate)
+            self.prior_estimate,
+            self.essential_theta_sets)
         
         return particle
     
@@ -678,7 +692,8 @@ class Particle():
             ln_pi_max,
             precalc_media,
             precalc_media_frozensets,
-            prior_estimate):
+            prior_estimate,
+            essential_theta_sets):
          
         self.theta_set_prev = theta_set_prev
         self.w_set_prev = w_set_prev
@@ -696,6 +711,7 @@ class Particle():
         self.precalc_media = precalc_media
         self.precalc_media_frozensets = precalc_media_frozensets
         self.prior_estimate = prior_estimate
+        self.essential_theta_sets = essential_theta_sets
         
         self.num_params = len(prior_set)
          
@@ -819,7 +835,8 @@ class Particle():
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
-        count_failed = 0
+        failed_precalc = 0
+        failed_theta_sets = 0
         print("\nFinding particle:".format(self.t, self.id))
         
         while True:
@@ -830,31 +847,49 @@ class Particle():
                 sys.stdout.write("\nParticle {} (epsilon = {}),                   ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
             if debug:
-                sys.stdout.write("\nProposing theta ...                           ")    
+                sys.stdout.write("\nProposing theta ...                           \n")    
                 sys.stdout.flush()
             self.propose_theta()
-            if debug:
-                sys.stdout.write("\rApplying proposed theta ...                        ")    
-                sys.stdout.flush()
-            self.apply_proposed_theta()
-            if debug:
-                sys.stdout.write("\rConducting experiments ...                         ")    
-                sys.stdout.flush()
-            self.conduct_experiments(debug=debug) 
-            if debug:
-                sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
-                if self.result != 2:
-                    sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
-                sys.stdout.flush()
-             
+            
+            ## Does excluded_theta_set contain any of the essential_theta_sets?  if so 
+            ## set result to 2
+            excluded_theta_set = set([idx for idx, t_value in enumerate(self.theta_proposed) if t_value == 0])
+            
+            running_model=True
+            for essential_theta_set in self.essential_theta_sets:
+                if essential_theta_set.issubset(excluded_theta_set):
+                    running_model=False
+            
+            if running_model:
+                if debug:
+                    sys.stdout.write("\rApplying proposed theta ...                        ")    
+                    sys.stdout.flush()
+                self.apply_proposed_theta()
+                if debug:
+                    sys.stdout.write("\rConducting experiments ...                         ")    
+                    sys.stdout.flush()
+                self.conduct_experiments(debug=debug) 
+                if debug:
+                    sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
+                    if self.result != 2:
+                        sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
+                    sys.stdout.flush()
+            else:
+                self.result = 3
+                if debug:
+                    print("At least one essential_theta_set was excluded")
+                
             ## If model is close enough to experiments, accept and return theta and calculated weight
-            if self.result > 1:
-                count_failed += 1
+            if self.result == 2:
+                failed_precalc += 1
+            elif self.result == 3:
+                failed_theta_sets += 1
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
                 sys.stdout.write("\n{} total attempts".format(count_attempts))
-                sys.stdout.write("\n{} failed on precalc".format(count_failed))
+                sys.stdout.write("\n{} failed on precalc".format(failed_precalc))
+                sys.stdout.write("\n{} failed on theta sets".format(failed_theta_sets))
                 sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
             
@@ -922,8 +957,6 @@ class Particle():
         """Perturbation function!
          
         Return a perturbed theta, theta_perturbed, from theta_sampled according to a simple distribution."""
-        
-        
         
         if theta_previous is None:
             ## Perturb the parameter set self.theta_sampled
