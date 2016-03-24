@@ -390,7 +390,7 @@ class AbcProblem():
                     prior_dict[details[0]] = float(details[1])
                 except:
                     prior_dict[details[0]] = self.default_prior_value
-                print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
+                #print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
             f_in.close()
         
         print("{} in prior_dict".format(len(prior_dict)))
@@ -465,6 +465,56 @@ class AbcProblem():
             precalc_media.append(precalc_medium)
         self.precalc_media = precalc_media
         self.precalc_media_frozensets = precalc_media_lists
+        
+        ## FIND ESSENTIAL REACTIONS HERE - for both OPEN media and precalc media
+        
+        ## For each reaction, find all RELs
+        abc_reaction_lists = []
+        for rxn_id in abc_reactions:
+            rxn_list = []
+            for reaction in self.model.reactions:
+                if reaction.id.startswith(rxn_id):
+                    rxn_list.append(reaction)
+            abc_reaction_lists.append(rxn_list)
+        
+        print("Testing full model with precalculated media ...")
+        for medium in self.precalc_media:
+            self.model.set_medium(medium)
+            precalc_fail = False
+            if self.model.opt() < 1e-5:
+                precalc_fail = True
+                print("Initial model did not run on precalc medium:")
+                for met, _ in medium.iteritems():
+                    print(" - {}".format(met))
+        if precalc_fail:
+            print("Failed on precalc media, exiting ...")
+            sys.exit(1)
+        
+        essential_abc_reaction_sets = []
+        count_rxn_lists = loop_counter(len(abc_reaction_lists),
+                                       'Testing ABC reactions for essentiality'
+                                       )
+        for rxn_list in abc_reaction_lists:
+            count_rxn_lists.step()
+            essential_rxn_set = False
+            for rxn in rxn_list:
+                rxn.lower_bound = 0
+                rxn.upper_bound = 0
+            for medium in self.precalc_media:
+                self.model.set_medium(medium)
+                if self.model.opt() < 1e-5:
+                    essential_rxn_set = True
+                    break
+            if essential_rxn_set:
+                essential_abc_reaction_sets.append(rxn_list)
+            for rxn in rxn_list:
+                rxn.lower_bound = rxn.lb_orig
+                rxn.upper_bound = rxn.ub_orig
+        count_rxn_lists.stop()
+        print(" - {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
+        
+        self.abc_reaction_lists = abc_reaction_lists             
+        self.essential_abc_reaction_sets = essential_abc_reaction_sets
         
         print("ABC initialisation complete.")
                 
