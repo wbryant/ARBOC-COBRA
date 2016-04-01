@@ -7,6 +7,7 @@ Created on 10 Dec 2014
 import sys
 from time import time
 import re
+from math import floor
 
 def preview_dict(in_dict, limit = 10):
     num_shown = 0
@@ -134,7 +135,7 @@ class ResultSet:
             print("There are no true positives.")
 
 
-class loop_counter:
+class loop_counter_old:
     """Use to track progress of a loop of known length."""
     
     def __init__(self, length, message = 'Entering loop', timed = False):
@@ -186,3 +187,46 @@ def recast_var(var, object_to_change):
         return str(var)
     else:
         return var
+
+
+class loop_counter:
+    """Use to track progress of a loop of known length."""
+    
+    def __init__(self, length, message = 'Entering loop', timed = False):
+        self.stopped = False
+        self.length = length
+        self.num_done = 0
+        self.next_progress = 1
+        self.percent_done = 0
+        self.timed = timed
+        if self.timed:
+            self.time_0 = time()
+        print("{}:".format(message))
+        sys.stdout.write("\r - %d %%" % self.num_done)
+        sys.stdout.flush()
+    
+    def step(self):
+        self.num_done += 1
+        if not self.stopped:
+            if self.num_done >= self.length:
+                self.stop()
+            else:
+                percent_done = floor(1000.0*self.num_done/self.length)/10
+                sys.stdout.write("\r - {} % ({} / {})".format(
+                    percent_done,
+                    self.num_done,
+                    self.length
+                ))
+                sys.stdout.flush()
+                
+    def stop(self):
+        if not self.stopped:
+            sys.stdout.write("\r - 100 % ({})\n".format(self.length))
+            self.stopped = True
+#             if self.timed:
+#                 time_n = time()
+#                 sys.stdout.write(" taking {} seconds.\n".format(time_n-self.time_0))
+            sys.stdout.flush()
+
+
+
