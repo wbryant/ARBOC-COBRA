@@ -91,13 +91,12 @@ def conduct_experiments_single(model, experiments):
     counter = loop_counter(len(valid_experiments), "Testing experiments")
     
     for idx, experiment in enumerate(valid_experiments):
-        counter.step()
         expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(model)
         running_results.tp += tp_add
         running_results.tn += tn_add
         running_results.fp += fp_add
         running_results.fn += fn_add
-        
+        counter.step()
 #         if experiment.result == 1:
 #             num_pos_remaining -= 1
 #         else:
@@ -406,7 +405,6 @@ class AbcProblem():
         ## and assign prior values according to prior_dict
         counter = loop_counter(len(abc_reactions),'Splitting ABC reactions')
         for rxn_id in abc_reactions:        
-            counter.step()
             enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
             num_enzrxns = len(enzrxn_ids)
             if rxn_id in prior_dict:
@@ -417,6 +415,7 @@ class AbcProblem():
                 prior_dict[enzrxn_id] = prior_value
             if non_enz_rxn_id:
                 prior_dict[non_enz_rxn_id] = self.default_prior_value
+            counter.step()
         counter.stop()
         
         ## Apply belief about rxn/gene/enzyme relationships
@@ -498,7 +497,6 @@ class AbcProblem():
                                        'Testing ABC reactions for essentiality'
                                        )
         for rxn_list in abc_reaction_lists:
-            count_rxn_lists.step()
             essential_rxn_set = False
             for rxn in rxn_list:
                 rxn.lower_bound = 0
@@ -513,6 +511,7 @@ class AbcProblem():
             for rxn in rxn_list:
                 rxn.lower_bound = rxn.lb_orig
                 rxn.upper_bound = rxn.ub_orig
+            count_rxn_lists.step()
         count_rxn_lists.stop()
         print(" - {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
         
@@ -1078,8 +1077,6 @@ class Particle():
         counter = loop_counter(len(valid_experiments), "Testing experiments")
         
         for idx, experiment in enumerate(valid_experiments):
-            
-            counter.step()
             expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(self.model, self.precalc_media_frozensets)
             running_results.tp += tp_add
             running_results.tn += tn_add
@@ -1103,7 +1100,7 @@ class Particle():
                 min_dist = 1 - check_results.balanced_accuracy()
                 if min_dist > self.epsilon:
                     break
-                    
+            counter.step()        
         counter.stop()
         self.num_tests_checked = num_succeeded_tests + num_failed_tests
 
@@ -1864,26 +1861,20 @@ def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose
     counter = loop_counter(len(valid_experiments), "Testing experiments")
     
     for experiment in valid_experiments:
-        
-        counter.step()
-#             sys.stdout.write("\rTesting experiment {}                                 ".format(idx))
-#             sys.stdout.flush()
         expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(model)
         running_results.tp += tp_add
         running_results.tn += tn_add
         running_results.fp += fp_add
-        running_results.fn += fn_add
-        
+        running_results.fn += fn_add        
         if experiment.result == 1:
             num_pos_remaining -= 1
         else:
             num_neg_remaining -= 1
-        
-        
         if expt_result == 1:
             num_succeeded_tests += 1
         if (expt_result != 1) and (expt_result != -2):
             num_failed_tests += 1
+        counter.step()
     
     counter.stop()
     num_tests_checked = num_succeeded_tests + num_failed_tests
