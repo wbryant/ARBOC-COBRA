@@ -221,7 +221,8 @@ class loop_counter:
                 
     def stop(self):
         if not self.stopped:
-            sys.stdout.write("\r - 100 % ({})\n".format(self.length))
+            sys.stdout.write("\r - 100 % ({})                        \n"
+                .format(self.length))
             self.stopped = True
 #             if self.timed:
 #                 time_n = time()
