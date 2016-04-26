@@ -3,9 +3,7 @@ Created on 10 Mar 2014
 
 @author: wbryant
 '''
-import re, sys
-from cobra.flux_analysis import variability
-from cobra.core.Model import Model
+from cobra.flux_analysis import find_blocked_reactions
 from cobra.core import ArrayBasedModel
 try:
     from cobra.io import write_sbml_model
@@ -434,11 +432,6 @@ class AbcProblem():
             rxn_theta_map[rxn_id] = idx
         self.prior_estimate = deepcopy(self.prior_set)
         
-        ## Create original lb/ub vars for reference
-        for rxn in self.model.reactions:
-            rxn.lb_orig = deepcopy(rxn.lower_bound)
-            rxn.ub_orig = deepcopy(rxn.upper_bound)
-        
         ## Calculate ln_pi_max for calculation of pi_rel in weight calculations
         ln_pi_max = 0
         for p in self.prior_set:
@@ -469,7 +462,6 @@ class AbcProblem():
         self.precalc_media_frozensets = precalc_media_lists
         
         ## FIND ESSENTIAL REACTIONS HERE for precalc media
-        
         ## For each reaction, find all RELs
         abc_reaction_lists = []
         for rxn_id in abc_reactions:
@@ -528,6 +520,28 @@ class AbcProblem():
         
         self.essential_theta_sets = essential_theta_sets
         
+        ## FIND BLOCKED REACTIONS AND SET BOUNDS TO 0
+        print("Setting bounds of blocked reactions to 0 ...")
+        blocked_rxn_ids = find_blocked_reactions(self.model, open_exchanges=True)
+        num_restricted = 0
+        for rxn_id in blocked_rxn_ids:
+            try:
+                blocked_reaction = self.model.reactions.get_by_id(rxn_id)
+                blocked_reaction.upper_bound = 0
+                blocked_reaction.lower_bound = 0
+                num_restricted += 1
+            except:
+                print(" - 'Blocked' reaction '{}' could not be found".format(
+                    rxn_id
+                ))
+        
+        print(" => {} reactions had bounds restricted to 0.".format(num_restricted))
+        
+        ## Create original lb/ub vars for reference
+        for rxn in self.model.reactions:
+            rxn.lb_orig = deepcopy(rxn.lower_bound)
+            rxn.ub_orig = deepcopy(rxn.upper_bound)
+                    
         print("ABC initialisation complete.")
                 
     
