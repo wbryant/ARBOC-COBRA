@@ -418,7 +418,59 @@ class AbcProblem():
         
         ## Apply belief about rxn/gene/enzyme relationships
         prior_dict = self.set_rxn_enz_priors(rxn_enz_priors, prior_dict)
-        
+
+        ## Create original lb/ub vars for reference
+        for rxn in self.model.reactions:
+            rxn.lb_orig = deepcopy(rxn.lower_bound)
+            rxn.ub_orig = deepcopy(rxn.upper_bound)
+               
+        ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
+        ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
+        prior_fn_value = 0.5  
+        print("Finding inessential genes incorrectly predicted as essential")
+        expt_num = 0
+        for expt in self.experiments:
+            expt_num += 1
+            expt_no_genotype = deepcopy(expt)
+            expt_no_genotype.genotype = []
+            if len(expt.genotype) == 1:
+                _, _, _, _, fn = expt.test(self.model)
+                #print expt_num, a, b, c, d, fn
+                if fn:
+                    print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
+                    ## Which reaction is implicated?
+                    ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
+                    self.model.unset_genotype()
+                    if len(ko_rxns) == 0:
+                        print (" - No KO rxns?!")
+                        pass
+                    elif len(ko_rxns) == 1:
+                        print("One KO rxn: '{}'".format(ko_rxns[0].id))
+                        ko_rxns_essential = [ko_rxns[0].id]
+                    else:
+                        ## Find model-breaking reaction(s)
+                        ko_rxns_essential = []
+                        for rxn in ko_rxns:
+                            rxn.lower_bound = 0
+                            rxn.upper_bound = 0
+                            _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
+                            if fn_rxn:
+                                ko_rxns_essential.append(rxn.id)
+                            rxn.lower_bound = rxn.lb_orig
+                            rxn.upper_bound = rxn.ub_orig
+                    for rxn_id in ko_rxns_essential:
+                        try:
+                            ## Already in prior dict? Amend if new prior lower
+                            prior_val = prior_dict[rxn_id]
+                            print(" => '{}' original prior = {}".format(rxn_id, prior_val))
+                            if prior_val > prior_fn_value:
+                                prior_dict[rxn_id] = prior_fn_value
+                                print(" => new prior = {}".format(prior_fn_value))
+                        except:
+                            ## Add to prior dict
+                            prior_dict[rxn_id] = prior_fn_value   
+                            print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
+                        
         ## All beliefs about reactions included in the model are now in prior_dict.
         ## Any reaction not in prior_dict is not in the ABC and should always be included.
         self.prior_set = np.ones(len(prior_dict))
@@ -537,11 +589,9 @@ class AbcProblem():
         
         print(" => {} reactions had bounds restricted to 0.".format(num_restricted))
         
-        ## Create original lb/ub vars for reference
-        for rxn in self.model.reactions:
-            rxn.lb_orig = deepcopy(rxn.lower_bound)
-            rxn.ub_orig = deepcopy(rxn.upper_bound)
-                    
+
+        
+        
         print("ABC initialisation complete.")
                 
     
@@ -1177,7 +1227,7 @@ def import_experiments(model, objective_name = "Biomass_BT_v2"):
     
     for line in expts_in:
         if line[0] != "#":
-            details = line.split("\t")
+            details = line.strip().split("\t")
             medium_base = details[1]
             c_source = details[2]
             genotype = details[3].split(" and ")
@@ -1249,8 +1299,6 @@ class Experiment():
         
         change_to_model = ec_model.set_genotype(self.genotype)
         if (change_to_model == 0) & (self.medium_components in precalc_frozensets):
-#             sys.stdout.write(" -> Precalculated medium, no change in model")
-#             sys.stdout.flush()
             return 1, 1, 0, 0, 0 
         elif change_to_model == -1:
             ## Gene is not in model.
@@ -1462,21 +1510,20 @@ class ExtendedCobraModel(ArrayBasedModel):
                 halted_rxn[0].lower_bound = halted_rxn[2]   
         self.halted_reactions = []
     
-    def set_genotype(self, genotype):
+    def set_genotype(self, genotype, return_ko_rxns=False):
         """
         Run delete_model_genes on model.  Return False if no change is made to the model
         """
-        
+        if len(genotype) == 0:
+            return -2
         try:
             ## CODE FROM COBRAPY: to access reaction deletions
             # Allow a single gene to be fed in as a string instead of a list.
-            if not hasattr(genotype, '__iter__') or \
-                    hasattr(genotype, 'id'):  # cobra.Gene has __iter__
+            if not hasattr(genotype, '__iter__') or hasattr(genotype, 'id'):
                 genotype = [genotype]
-        
             if not hasattr(genotype[0], 'id'):
                 if genotype[0] in self.genes:
-                        tmp_gene_dict = dict([(x.id, x) for x in self.genes])
+                    tmp_gene_dict = dict([(x.id, x) for x in self.genes])
                 else:
                     # assume we're dealing with names if no match to an id
                     tmp_gene_dict = dict([(x.name, x) for x in self.genes])
@@ -1486,9 +1533,9 @@ class ExtendedCobraModel(ArrayBasedModel):
                 x.functional = False
         except:
             return -1
-       
-        
         knocked_out_reactions = find_gene_knockout_reactions(self, genotype)
+        if return_ko_rxns:
+            return knocked_out_reactions
         if len(knocked_out_reactions) == 0:
             return 0
         else:
