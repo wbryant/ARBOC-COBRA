@@ -4,3 +4,5 @@
 .DS_Store
 *~
 /gurobi.log
+push_git.sh
+
