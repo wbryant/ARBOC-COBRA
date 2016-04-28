@@ -1397,21 +1397,12 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         rxn = self.reactions.get_by_id(reaction_id)
         gpr_list = self.enzymes_as_gprs(rxn)
-                
         if len(gpr_list) > enzyme_limit:
-#             print("Too many enzymes ({}) for reaction {}.".format(len(gpr_list),reaction_id))
             return [rxn.id], None
-#         elif len(gpr_list) == 1:
-# #             print("Single enzyme for reaction {}.".format(rxn.id))
-#             return[rxn.id], rxn.id
         elif len(gpr_list) == 0:
-#             print("Spontaneous reaction: {}.".format(rxn.id))
             return [rxn.id], None
-        
         enzyme_index = 0
         enzrxn_id_list = []
-        
-#         print("{} enzymes for reaction {}.".format(len(gpr_list), rxn.id))
         for gpr in gpr_list:
             enzyme_index += 1
             rxn_dup = deepcopy(rxn)
@@ -1419,12 +1410,8 @@ class ExtendedCobraModel(ArrayBasedModel):
             rxn_dup.id = rxn_dup.id + "_enz" + str(enzyme_index)
             enzrxn_id_list.append(rxn_dup.id)
             self.add_reaction(rxn_dup)
-
         rxn.gene_reaction_rule = ''
-        
         return enzrxn_id_list, rxn.id
-        
-        
         
     def enzyme_to_gpr(self, enzyme_string, warn_if_absent = False, reject_if_absent = False):
         """Convert enzyme string to GPR string.
@@ -1464,52 +1451,7 @@ class ExtendedCobraModel(ArrayBasedModel):
         for enzyme in enzymes:
             gpr_list.append(self.enzyme_to_gpr(enzyme))
         return gpr_list
-    
-  
-    def halt_reactions(self, reaction_list):
-        """Remove each reaction in list (of IDs), ignoring reactions that break the model.
         
-        USE WITH CARE! Will be dependent on current medium and objective.
-        """
-        ## Check that model runs
-        if self.opt() <= 0:
-            print("Model does not currently run ...")
-            return None
-        self.halted_reactions = []
-        print("Reactions halted ...")
-        for reaction_id in reaction_list:
-            reaction = self.reactions.get_by_id(reaction_id)
-            old_lb = 0
-            old_ub = 0
-            if reaction.lower_bound < 0:
-                old_lb = reaction.lower_bound
-                reaction.lower_bound = 0
-                self.halted_reactions.append((reaction, 'lb', old_lb))
-            if reaction.upper_bound > 0:
-                old_ub = reaction.upper_bound
-                reaction.upper_bound = 0
-                self.halted_reactions.append((reaction, 'ub', old_ub))
-            if self.opt() <= 0:
-                reaction.lower_bound = old_lb
-                reaction.upper_bound = old_ub
-                print("(Not {} - {}, {})".format(reaction.id, old_lb, old_ub))
-            else:
-                print(" - {} ({})".format(reaction.id, self.opt()))
-    
-    def unhalt_reactions(self):
-        """Reinstate reactions halted by 'halt_reactions_limited'."""
-        try:
-            halted_list = self.halted_reactions
-        except:
-            print("No halted reactions ...")
-            return None
-        for halted_rxn in halted_list:
-            if halted_rxn[1] == 'ub':
-                halted_rxn[0].upper_bound = halted_rxn[2]
-            else:
-                halted_rxn[0].lower_bound = halted_rxn[2]   
-        self.halted_reactions = []
-    
     def set_genotype(self, genotype, return_ko_rxns=False):
         """
         Run delete_model_genes on model.  Return False if no change is made to the model
@@ -1880,14 +1822,7 @@ def compare_rel_lists(query_file, ref_file, ignore_genes=['0000000.0.peg.0']):
 
 def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose=False):
     """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
-     
-#         ## Check that the model can run without changes, else return 1
-#         if model.opt() <= 0:
-#             print("Failed on original media")
-#             self.result = 1
-#             return None
-    
-     
+          
     if debug:
         sys.stdout.write("\rCreating list of valid experiments ...                           ")    
         sys.stdout.flush()
@@ -1900,7 +1835,6 @@ def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose
         all_genes_present = True
         for gene in expt.genotype:
             if gene not in gene_ids_in_model:
-#                     print("Expt {}: '{}' not present in model ...".format(idx+1, gene))
                 all_genes_present = False
                 break
         if all_genes_present:
@@ -1940,63 +1874,7 @@ def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose
     counter.stop()
     num_tests_checked = num_succeeded_tests + num_failed_tests
     full_results = deepcopy(running_results) 
-    return full_results, num_tests_checked    
-    
-def compare_models(model1, model2):
-    """Compare 2 extended COBRA models."""
-    
-    ## Get reaction lists (all by ID)
-    model1_reactions = []
-    for reaction in model1.reactions:
-        model1_reactions.append(reaction.id)
-    
-    model1_reactions = set(model1_reactions)
-    
-    model2_reactions = []
-    for reaction in model2.reactions:
-        model2_reactions.append(reaction.id)
-    
-    model2_reactions = set(model2_reactions)
-    
-    reactions_only_1 = model1_reactions - model2_reactions
-    
-    if len(reactions_only_1) > 0:
-        print("Reactions only in first model:")
-        for rxn in reactions_only_1:
-            print rxn
-    
-    reactions_only_2 = model2_reactions - model1_reactions
-    
-    if len(reactions_only_2) > 0:
-        print("Reactions only in second model:")
-        for rxn in reactions_only_2:
-            print rxn
-    
-    rxns_both = model1_reactions & model2_reactions
-    
-    print("Reactions in both with differing bounds:\n")
-    for rxn in rxns_both:
-        rm1 = get_reaction(model1, rxn)
-        
-        rm2 = get_reaction(model2, rxn)
-        
-        lb_diff = False
-        ub_diff = False
-        lb = 'same'
-        ub = 'same'
-        
-        
-        if (rm1.lower_bound != rm2.lower_bound):
-            lb_diff = True
-            lb = 'diff'
-             
-        if (rm1.upper_bound != rm2.upper_bound):
-            ub_diff = True
-            ub = 'diff'
-            
-        if ub_diff or lb_diff:
-            print("{:10}\t{}\t{}".format(rxn, ub, lb))
-    
+    return full_results, num_tests_checked        
     
 if __name__ == '__main__':
     pass
