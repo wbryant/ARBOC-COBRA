@@ -5,7 +5,6 @@ Created on 10 Mar 2014
 '''
 from cobra.flux_analysis import find_blocked_reactions
 from cobra.core import ArrayBasedModel
-from abcsmc_dev.local_utils import loop_counter
 try:
     from cobra.io import write_sbml_model
 except:
