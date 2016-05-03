@@ -374,22 +374,23 @@ class AbcProblem():
         
         print("Loading prior values ...")
         model_reaction_ids = [reaction.id for reaction in self.model.reactions]
-        prior_dict = {}
-        if prior_file:
-            f_in = open(prior_file, 'r')
-            for line in f_in:
-                details = line.strip().split("\t")
-                if details[0] not in model_reaction_ids:
-                    print("At least one reaction ID is not recognised ('{}')".format(details[0]))
-                    for reaction_id in model_reaction_ids[0:9]:
-                        print reaction_id
-                    sys.exit(1)
-                try:
-                    prior_dict[details[0]] = float(details[1])
-                except:
-                    prior_dict[details[0]] = self.default_prior_value
-                #print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
-            f_in.close()
+        if not prior_dict:
+            prior_dict = {}
+            if prior_file:
+                f_in = open(prior_file, 'r')
+                for line in f_in:
+                    details = line.strip().split("\t")
+                    if details[0] not in model_reaction_ids:
+                        print("At least one reaction ID is not recognised ('{}')".format(details[0]))
+                        for reaction_id in model_reaction_ids[0:9]:
+                            print reaction_id
+                        sys.exit(1)
+                    try:
+                        prior_dict[details[0]] = float(details[1])
+                    except:
+                        prior_dict[details[0]] = self.default_prior_value
+                    #print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
+                f_in.close()
         
         print("{} in prior_dict".format(len(prior_dict)))
         
