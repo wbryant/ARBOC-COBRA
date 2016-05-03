@@ -5,6 +5,7 @@ Created on 10 Mar 2014
 '''
 from cobra.flux_analysis import find_blocked_reactions
 from cobra.core import ArrayBasedModel
+from abcsmc_dev.local_utils import loop_counter
 try:
     from cobra.io import write_sbml_model
 except:
@@ -428,7 +429,7 @@ class AbcProblem():
         ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
         ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
         prior_fn_value = 0.5  
-        print("Finding inessential genes incorrectly predicted as essential")
+        counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
         expt_num = 0
         for expt in self.experiments:
             expt_num += 1
@@ -438,15 +439,15 @@ class AbcProblem():
                 _, _, _, _, fn = expt.test(self.model)
                 #print expt_num, a, b, c, d, fn
                 if fn:
-                    print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
+                    #print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
                     ## Which reaction is implicated?
                     ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
                     self.model.unset_genotype()
                     if len(ko_rxns) == 0:
-                        print (" - No KO rxns?!")
+                        #print (" - No KO rxns?!")
                         pass
                     elif len(ko_rxns) == 1:
-                        print("One KO rxn: '{}'".format(ko_rxns[0].id))
+                        #print("One KO rxn: '{}'".format(ko_rxns[0].id))
                         ko_rxns_essential = [ko_rxns[0].id]
                     else:
                         ## Find model-breaking reaction(s)
@@ -463,15 +464,16 @@ class AbcProblem():
                         try:
                             ## Already in prior dict? Amend if new prior lower
                             prior_val = prior_dict[rxn_id]
-                            print(" => '{}' original prior = {}".format(rxn_id, prior_val))
+                            #print(" => '{}' original prior = {}".format(rxn_id, prior_val))
                             if prior_val > prior_fn_value:
                                 prior_dict[rxn_id] = prior_fn_value
-                                print(" => new prior = {}".format(prior_fn_value))
+                                #print(" => new prior = {}".format(prior_fn_value))
                         except:
                             ## Add to prior dict
                             prior_dict[rxn_id] = prior_fn_value   
-                            print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
-                        
+                            #print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
+            counter.step()
+        counter.stop()
         ## All beliefs about reactions included in the model are now in prior_dict.
         ## Any reaction not in prior_dict is not in the ABC and should always be included.
         self.prior_set = np.ones(len(prior_dict))
