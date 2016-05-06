@@ -241,25 +241,7 @@ def import_rxn_ids_from_file(file_in, criterion = None):
             rxn_ids.append(rxn_id)
     f_in.close()
     
-    return rxn_ids
-        
-# def get_p_transition(t,T,p_0 = 0.1, type='linear'):
-#     if type == 'linear':
-#         step_size = p_0 / T
-#         p = p_0 - step_size * t
-#         return p
-#     else:
-#         return None
-#    
-# 
-# def get_epsilon(t,T, epsilon_0 = 0.5,type='linear'):
-#     if type == 'linear':
-#         step_size = epsilon_0 / T
-#         epsilon = epsilon_0 - step_size * t
-#         return epsilon
-#     else:
-#         return None
-      
+    return rxn_ids      
 
 class AbcProblem():
     
@@ -307,7 +289,7 @@ class AbcProblem():
         elif model:
             self.model = deepcopy(model)
         else:
-            print("No model specified, exiting ...")
+            print("Model not specified, exiting ...")
             sys.exit(1)    
         
         print("Loading experiments ...")
@@ -318,6 +300,13 @@ class AbcProblem():
         else:
             print("Experiments not specified, exiting ...")
             sys.exit(1)
+        
+        ## Test full model balanced accuracy
+        print("Testing initial model ...")
+        initial_results, _ = conduct_experiments(self.model, self.experiments)
+        #print(" => balanced accuracy = {}".format(initial_results.balanced_accuracy()))
+        print(" => Results:\n")
+        initial_results.stats()        
         
         ## Give total numbers of positive and negative results for calculating test cutoffs
         self.num_expts_pos = 0
@@ -359,7 +348,7 @@ class AbcProblem():
         self.thetas_selected = []
         self.intermediate_theta_dict = {}
         
-        
+
         if self.include_all:
             print("Including all non-exchange reactions")
             abc_reactions = []
@@ -369,9 +358,7 @@ class AbcProblem():
             print("\t{} reactions in total".format(len(abc_reactions)))
         else:
             abc_reactions = abc_reactions or []
-        
         print("Pre-priors: {} reactions included".format(len(abc_reactions)))
-        
         print("Loading prior values ...")
         model_reaction_ids = [reaction.id for reaction in self.model.reactions]
         if not prior_dict:
@@ -419,6 +406,9 @@ class AbcProblem():
         
         ## Apply belief about rxn/gene/enzyme relationships
         prior_dict = self.set_rxn_enz_priors(rxn_enz_priors, prior_dict)
+        
+        abc_running_total = len(prior_dict)
+        print(" => {} RELs included".format(abc_running_total))
 
         ## Create original lb/ub vars for reference
         for rxn in self.model.reactions:
@@ -435,18 +425,18 @@ class AbcProblem():
             expt_no_genotype = deepcopy(expt)
             expt_no_genotype.genotype = []
             if len(expt.genotype) == 1:
-                _, _, _, _, fn = expt.test(self.model)
+                a, b, c, d, fn = expt.test(self.model)
                 #print expt_num, a, b, c, d, fn
                 if fn:
-                    #print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
+                    print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
                     ## Which reaction is implicated?
                     ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
                     self.model.unset_genotype()
                     if len(ko_rxns) == 0:
-                        #print (" - No KO rxns?!")
+                        print (" - No KO rxns?!")
                         pass
                     elif len(ko_rxns) == 1:
-                        #print("One KO rxn: '{}'".format(ko_rxns[0].id))
+                        print("One KO rxn: '{}'".format(ko_rxns[0].id))
                         ko_rxns_essential = [ko_rxns[0].id]
                     else:
                         ## Find model-breaking reaction(s)
@@ -463,16 +453,20 @@ class AbcProblem():
                         try:
                             ## Already in prior dict? Amend if new prior lower
                             prior_val = prior_dict[rxn_id]
-                            #print(" => '{}' original prior = {}".format(rxn_id, prior_val))
+                            print(" => '{}' original prior = {}".format(rxn_id, prior_val))
                             if prior_val > prior_fn_value:
                                 prior_dict[rxn_id] = prior_fn_value
-                                #print(" => new prior = {}".format(prior_fn_value))
+                                print(" => new prior = {}".format(prior_fn_value))
                         except:
                             ## Add to prior dict
                             prior_dict[rxn_id] = prior_fn_value   
-                            #print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
+                            print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
             counter.step()
         counter.stop()
+        
+        print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
+        
+        
         ## All beliefs about reactions included in the model are now in prior_dict.
         ## Any reaction not in prior_dict is not in the ABC and should always be included.
         self.prior_set = np.ones(len(prior_dict))
@@ -559,7 +553,7 @@ class AbcProblem():
                 rxn.upper_bound = rxn.ub_orig
             count_rxn_lists.step()
         count_rxn_lists.stop()
-        print(" - {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
+        print(" => {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
         
         #self.abc_reaction_lists = abc_reaction_lists             
         #self.essential_reaction_sets = essential_abc_reaction_sets
@@ -591,8 +585,14 @@ class AbcProblem():
         
         print(" => {} reactions had bounds restricted to 0.".format(num_restricted))
         
-
         
+        ## Test full model balanced accuracy
+        print("Testing full model ...")
+        particle_full = self.initialise_particle(0)
+        particle_full.conduct_experiments()
+        print(" => balanced accuracy = {}".format(1.0-particle_full.result))
+#         print(" => Results:\n")
+#         initial_results.stats() 
         
         print("ABC initialisation complete.")
                 
