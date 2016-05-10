@@ -158,15 +158,12 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file 
     """
     
     objective = model.reactions.get_by_id(objective_id)
-    
     data_file = data_file or '/Users/wbryant/work/BTH/analysis/gene_essentiality/essentiality_data_complete.csv'
     experiments = []
     expts_in = open(data_file,'r')
     if not media:
         media = {}
-    line_number = 0
     for line in expts_in:
-#         line_number += 1
         if line[0] != "#":
             details = line.strip().split("\t")
             if details[0] == 'MEDIUM':
@@ -263,9 +260,10 @@ class AbcProblem():
             include_all=False,
             prior_file=None,
             model_file=None,
-            biomass_id='biomass0',
+            biomass_id=None,
             experiments_file=None,
-            original_model_rxn_ids=None):
+            original_model_rxn_ids=None,
+            solver=None):
 
         """Set up ABC for given model
         
@@ -283,10 +281,13 @@ class AbcProblem():
         self.t = 0
         self.N = particles_per_population
         self.T = num_populations_max
+        solver = solver or 'glpk'
+        biomass_id = biomass_id or 'Biomass0'
+        experiments_file = experiments_file or None
         
         print("Loading model ...")
         if model_file:
-            self.model = create_extended_model(model_file,biomass_id)
+            self.model = create_extended_model(model_file,biomass_id,solver=solver)
         elif model:
             self.model = deepcopy(model)
         else:
@@ -1362,7 +1363,7 @@ class Experiment():
 #         print("%3s (%d): %d" % (self.id, self.result, answer))
         return expt_result, tp, tn, fp, fn
         
-def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_solver=True, solver='cglpk'):
+def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_solver=True, solver='cglpk',tidy_ids=True):
     """Take an ArrayBasedModel and convert to an Extended_Cobra_Model."""
     
     print("Creating extended COBRA model")
@@ -1375,15 +1376,26 @@ def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_so
         ecm_model.change_objective(objective_id)
     except:
         print("Objective could not be set ...")
-    
-    for rxn in ecm_model.reactions:
-        newID = re.sub('_LPAREN_','_',rxn.id)
-        newID = re.sub('_RPAREN_','',newID)
-        newID = re.sub('\(','_',newID)
-        newID = re.sub('\)','',newID)
-        rxn.id = newID
-    
-    ecm_model.repair()
+    if tidy_ids:
+        for rxn in ecm_model.reactions:
+            newID = re.sub('_LPAREN_','_',deepcopy(rxn.id))
+            newID = re.sub('_RPAREN_','',newID)
+            newID = re.sub('\(','_',newID)
+            newID = re.sub('\)','',newID)
+            newID = re.sub('_LSQBKT_','_',newID)
+            newID = re.sub('_RSQBKT_','',newID)
+            if newID.endswith('_er'):
+                newID = newID[:-1]           
+            rxn.id = newID       
+        ecm_model.repair() 
+        for gene in ecm_model.genes:
+            gene_id = re.sub('^(G_)+','',gene.id)
+            gene.id = gene_id
+        ecm_model.repair()
+        for reaction in ecm_model.reactions:
+            grr = re.sub('(G_)','',reaction.gene_reaction_rule)
+            reaction.gene_reaction_rule = grr        
+        ecm_model.repair()
     return ecm_model    
 
 class ExtendedCobraModel(ArrayBasedModel):
