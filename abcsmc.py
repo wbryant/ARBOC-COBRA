@@ -264,7 +264,8 @@ class AbcProblem():
             prior_file=None,
             model_file=None,
             biomass_id='biomass0',
-            experiments_file=None):
+            experiments_file=None,
+            original_model_rxn_ids=None):
 
         """Set up ABC for given model
         
@@ -301,12 +302,26 @@ class AbcProblem():
             print("Experiments not specified, exiting ...")
             sys.exit(1)
         
-        ## Test full model balanced accuracy
-        print("Testing initial model ...")
-        initial_results, _ = conduct_experiments(self.model, self.experiments)
-        #print(" => balanced accuracy = {}".format(initial_results.balanced_accuracy()))
-        print(" => Results:\n")
-        initial_results.stats()        
+#         if original_model_rxn_ids:
+#             ## Test original model
+#             print("Testing original model ...")
+#             model_orig = deepcopy(self.model)
+#             for reaction in model_orig.reactions:
+#                 if reaction.id not in original_model_rxn_ids:
+#                     reaction.remove_from_model()
+#             model.repair()     
+#             original_results, _ = conduct_experiments(model_orig, self.experiments)
+#             print(" => Results:\n")
+#             original_results.stats()    
+#                 
+# 
+#         ## Test full model
+#         print("Testing full model ...")
+#         initial_results, _ = conduct_experiments(self.model, self.experiments)
+#         print(" => Results:\n")
+#         initial_results.stats()        
+        
+        
         
         ## Give total numbers of positive and negative results for calculating test cutoffs
         self.num_expts_pos = 0
@@ -428,15 +443,15 @@ class AbcProblem():
                 a, b, c, d, fn = expt.test(self.model)
                 #print expt_num, a, b, c, d, fn
                 if fn:
-                    print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
+#                     print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
                     ## Which reaction is implicated?
                     ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
                     self.model.unset_genotype()
                     if len(ko_rxns) == 0:
-                        print (" - No KO rxns?!")
+#                         print (" - No KO rxns?!")
                         pass
                     elif len(ko_rxns) == 1:
-                        print("One KO rxn: '{}'".format(ko_rxns[0].id))
+#                         print("One KO rxn: '{}'".format(ko_rxns[0].id))
                         ko_rxns_essential = [ko_rxns[0].id]
                     else:
                         ## Find model-breaking reaction(s)
@@ -453,14 +468,14 @@ class AbcProblem():
                         try:
                             ## Already in prior dict? Amend if new prior lower
                             prior_val = prior_dict[rxn_id]
-                            print(" => '{}' original prior = {}".format(rxn_id, prior_val))
+#                             print(" => '{}' original prior = {}".format(rxn_id, prior_val))
                             if prior_val > prior_fn_value:
                                 prior_dict[rxn_id] = prior_fn_value
-                                print(" => new prior = {}".format(prior_fn_value))
+#                                 print(" => new prior = {}".format(prior_fn_value))
                         except:
                             ## Add to prior dict
                             prior_dict[rxn_id] = prior_fn_value   
-                            print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
+#                             print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
             counter.step()
         counter.stop()
         
@@ -531,11 +546,14 @@ class AbcProblem():
         if precalc_fail:
             print("Failed on precalc media, exiting ...")
             sys.exit(1)
-        
+        else:
+            print("... done.")
+            
         essential_abc_reaction_sets = []
-        count_rxn_lists = loop_counter(len(abc_reaction_lists),
-                                       'Testing ABC reactions for essentiality'
-                                       )
+        count_rxn_lists = loop_counter(
+            len(abc_reaction_lists),
+            'Testing ABC reactions for essentiality'
+        )
         for rxn_list in abc_reaction_lists:
             essential_rxn_set = False
             for rxn in rxn_list:
@@ -586,13 +604,19 @@ class AbcProblem():
         print(" => {} reactions had bounds restricted to 0.".format(num_restricted))
         
         
-        ## Test full model balanced accuracy
-        print("Testing full model ...")
-        particle_full = self.initialise_particle(0)
-        particle_full.conduct_experiments()
-        print(" => balanced accuracy = {}".format(1.0-particle_full.result))
+#         ## Test full model balanced accuracy
+#         print("Testing full ABC model ...")
+#         particle_full = self.initialise_particle(0)
+#         particle_full.conduct_experiments()
+#         print(" => balanced accuracy = {}".format(1.0-particle_full.result))
+# #         print(" => Results:\n")
+# #         initial_results.stats() 
+#         
+#         ## Test full model
+#         print("\nTesting full ABC model w/o particle ...")
+#         initial_results, _ = conduct_experiments(self.model, self.experiments)
 #         print(" => Results:\n")
-#         initial_results.stats() 
+#         initial_results.stats()         
         
         print("ABC initialisation complete.")
                 
