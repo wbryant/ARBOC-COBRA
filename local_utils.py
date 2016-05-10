@@ -126,6 +126,14 @@ class ResultSet:
             accuracy = self.accuracy()
             balanced_accuracy = self.balanced_accuracy()
             
+            print("tp\ttn\tfp\tfn")
+            print("{}\t{}\t{}\t{}\n".format(
+                self.tp,
+                self.tn,
+                self.fp,
+                self.fn
+            ))
+            
             print("%12s = %1.3f" % ('Precision', precision))
             print("%12s = %1.3f" % ('Recall', recall))
             print("%12s = %1.3f" % ('F-measure', f_measure))
