@@ -141,6 +141,15 @@ class ResultSet:
             print("%12s = %1.3f" % ('Bal. Accuracy', balanced_accuracy))
         else:
             print("There are no true positives.")
+            print("tp\ttn\tfp\tfn")
+            print("{}\t{}\t{}\t{}\n".format(
+                self.tp,
+                self.tn,
+                self.fp,
+                self.fn
+            ))
+             
+            
 
 
 class loop_counter_old:
