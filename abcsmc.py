@@ -147,7 +147,7 @@ def import_media(media_shelf_file=None):
 
 
     
-def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file = None):
+def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file=None, debug=False):
     """From a table of genotype/growth information, create the experiments 
     for a particular organism.
     
@@ -156,7 +156,7 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file 
     the following cells will contain medium components for specifying media 
     used in the experiments. 
     """
-    
+    print("Importing data ...")
     objective = model.reactions.get_by_id(objective_id)
     data_file = data_file or '/Users/wbryant/work/BTH/analysis/gene_essentiality/essentiality_data_complete.csv'
     experiments = []
@@ -179,18 +179,12 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file 
                     print("Medium '{}' cannot be set on the model - incorrect component ID?".format(medium_name))
                     for component in medium_components:
                         print (" - {}".format(component))        
-            else:   
+            else:
                 medium_base = details[1]
                 c_source = details[2]
                 genotype = details[3].split(" and ")
                 result = details[4]
-                
-#                 print line_number
-#                 print details
-#                 print medium_base
-                
                 c_sources = []
-                
                 ## Add carbon source to medium
                 if c_source == "-":
                     c_sources = []
@@ -203,12 +197,9 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file 
                 expt_medium = deepcopy(media[medium_base])
                 if c_sources:
                     for source in c_sources:
-                        c_source_exchange = "EX_" + source + "(e)"
+                        c_source_exchange = "EX_" + source + "_e"
                         expt_medium[c_source_exchange] = -100
-                
-                
                 experiment = Experiment(details[0], expt_medium, result, genotype, objective)
-                
                 experiments.append(experiment)
     expts_in.close()
     return experiments
@@ -263,7 +254,8 @@ class AbcProblem():
             biomass_id=None,
             experiments_file=None,
             original_model_rxn_ids=None,
-            solver=None):
+            solver=None,
+            prior_multiplier=None):
 
         """Set up ABC for given model
         
@@ -482,7 +474,14 @@ class AbcProblem():
         
         print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
         
-        
+        ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
+        if prior_multiplier:
+            print("Using prior multiplier ...")
+            for rxn_id, prior_val in prior_dict.iteritems():
+                prior_val_new = prior_val + (1.0-prior_val)*prior_multiplier
+                #print(" => {}\t{}\t{}".format(rxn_id,prior_val,prior_val_new))
+                prior_dict[rxn_id] = prior_val_new
+            
         ## All beliefs about reactions included in the model are now in prior_dict.
         ## Any reaction not in prior_dict is not in the ABC and should always be included.
         self.prior_set = np.ones(len(prior_dict))
@@ -491,11 +490,17 @@ class AbcProblem():
         idx = -1
         for rxn_id, prior_value in prior_dict.iteritems():
             idx += 1
+            #print rxn_id, prior_value
             self.prior_set[idx] = prior_value
             self.model.theta_rxn_map[idx] = self.model.reactions.get_by_id(rxn_id)
             rxn_theta_map[rxn_id] = idx
         self.prior_estimate = deepcopy(self.prior_set)
         
+        if prior_multiplier:
+            print 1
+            print "Prior_estimate: ", self.prior_estimate
+            print "Prior_set: ", self.prior_set
+            
         ## Calculate ln_pi_max for calculation of pi_rel in weight calculations
         ln_pi_max = 0
         for p in self.prior_set:
@@ -549,6 +554,12 @@ class AbcProblem():
             sys.exit(1)
         else:
             print("... done.")
+
+        if prior_multiplier:
+            print 2
+            print "Prior_estimate: ", self.prior_estimate
+            print "Prior_set: ", self.prior_set
+
             
         essential_abc_reaction_sets = []
         count_rxn_lists = loop_counter(
@@ -577,15 +588,25 @@ class AbcProblem():
         #self.abc_reaction_lists = abc_reaction_lists             
         #self.essential_reaction_sets = essential_abc_reaction_sets
         
-        ## CONVERT REACTION SETS TO THETA SUBSETS
+        ## CONVERT REACTION SETS TO THETA SUBSETS - IF ONLY A SINGLE THETA, SET PRIOR TO ONE!
         essential_theta_sets = []
         for rxn_list in essential_abc_reaction_sets:
-            theta_indices = []
-            for rxn in rxn_list:
-                theta_indices.append(rxn_theta_map[rxn.id])
-            essential_theta_sets.append(set(theta_indices))
+            if len(rxn_list) == 1:
+                self.prior_set[rxn_theta_map[rxn.id]] = 1
+                self.prior_estimate[rxn_theta_map[rxn.id]] = 1
+            else:
+                theta_indices = []
+                for rxn in rxn_list:
+                    theta_indices.append(rxn_theta_map[rxn.id])
+                essential_theta_sets.append(set(theta_indices))
         
         self.essential_theta_sets = essential_theta_sets
+
+        if prior_multiplier:
+            print 3
+            print "Prior_estimate: ", self.prior_estimate
+            print "Prior_set: ", self.prior_set
+
         
         ## FIND BLOCKED REACTIONS AND SET BOUNDS TO 0
         print("Setting bounds of blocked reactions to 0 ...")
@@ -613,11 +634,17 @@ class AbcProblem():
 # #         print(" => Results:\n")
 # #         initial_results.stats() 
 #         
-#         ## Test full model
-#         print("\nTesting full ABC model w/o particle ...")
-#         initial_results, _ = conduct_experiments(self.model, self.experiments)
-#         print(" => Results:\n")
-#         initial_results.stats()         
+        ## Test full model
+        print("\nTesting full ABC model w/o particle ...")
+        initial_results, _ = conduct_experiments(self.model, self.experiments)
+        print(" => Results:\n")
+        initial_results.stats()         
+
+        if prior_multiplier:
+            print 4
+            print "Prior_estimate: ", self.prior_estimate
+            print "Prior_set: ", self.prior_set
+
         
         print("ABC initialisation complete.")
                 
@@ -921,7 +948,7 @@ class Particle():
             except:
                 self.ln_w = None
               
-    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False):
+    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=None):
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
@@ -931,8 +958,14 @@ class Particle():
         
         while True:
             count_attempts += 1
-            sys.stdout.write(".")
-            sys.stdout.flush()
+            if max_tests:
+                if count_attempts > max_tests:
+                    print("Too many failed, exiting ...")
+                    print("Attempts\tPrecalc\tThetasets")
+                    print("{}\t{}\t{}".format(count_attempts,failed_precalc,failed_theta_sets))
+                    return -1,-1,-1,-1
+            #sys.stdout.write(".")
+            #sys.stdout.flush()
             if debug:
                 sys.stdout.write("\nParticle {} (epsilon = {}),                   ".format(count_attempts, self.epsilon))    
                 sys.stdout.flush()
@@ -949,16 +982,29 @@ class Particle():
             for essential_theta_set in self.essential_theta_sets:
                 if essential_theta_set.issubset(excluded_theta_set):
                     running_model=False
+#                     if debug:
+#                         print essential_theta_set
+#             
+#             if debug:
+#                 print("")
             
             if running_model:
                 if debug:
                     sys.stdout.write("\rApplying proposed theta ...                        ")    
                     sys.stdout.flush()
                 self.apply_proposed_theta()
+                
+                sys.stdout.write("\rConducting experiments ...                         ")    
+                sys.stdout.flush()
+                
                 if debug:
                     sys.stdout.write("\rConducting experiments ...                         ")    
                     sys.stdout.flush()
-                self.conduct_experiments(debug=debug) 
+                self.conduct_experiments(debug=debug)
+                sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
+                if self.result != 2:
+                    sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
+                sys.stdout.flush() 
                 if debug:
                     sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
                     if self.result != 2:
@@ -974,6 +1020,10 @@ class Particle():
                 failed_precalc += 1
             elif self.result == 3:
                 failed_theta_sets += 1
+                if debug:
+                    if failed_theta_sets > 50:
+                        print("Too many failed, exiting ...")
+                        return -1,-1,-1,-1
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
@@ -982,7 +1032,9 @@ class Particle():
                 sys.stdout.write("\n{} failed on theta sets".format(failed_theta_sets))
                 sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
-            
+            else:
+                if debug:
+                    print("epsilon = {}".format(self.result))
     
     def perturb_param_using_prior(self, idx):
         """Return p_transition based on current prior estimate for REL idx."""
@@ -1575,7 +1627,7 @@ class ExtendedCobraModel(ArrayBasedModel):
 #             print("No solution.")
             return 0
     
-    def set_medium(self,medium_dict=None):
+    def set_medium(self,medium_dict=None,debug=False):
         """
         Set exchanges of all "EX_" reactions to zero, or what is in medium_dict.
         medium_dict: key = reaction ID, value = new lower bound.
@@ -1592,8 +1644,9 @@ class ExtendedCobraModel(ArrayBasedModel):
                     exchange_rxn_dict[component].lower_bound = medium_dict[component]
                 elif 'EX_' + component + '(e)' in exchange_rxn_dict:
                     exchange_rxn_dict['EX_' + component + '(e)'].lower_bound = medium_dict[component]
-#                 else:
-#                     print("Reaction ID '%s' not found, ignoring ..." % component)
+                else:
+                    if debug:
+                        print("Reaction ID '{}' not found, ignoring ...".format(component))
         self.medium_dict = medium_dict
         
         
