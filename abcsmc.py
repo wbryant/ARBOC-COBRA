@@ -239,7 +239,7 @@ class AbcProblem():
             model=None,
             abc_reactions = None,
             prior_dict = None,
-            rxn_enz_priors = None,
+            rel_priors = None,
             default_prior_value = 0.99,
             enzyme_limit = 10,
             objective_name = 'Biomass',
@@ -255,7 +255,8 @@ class AbcProblem():
             experiments_file=None,
             original_model_rxn_ids=None,
             solver=None,
-            prior_multiplier=None):
+            prior_multiplier=None,
+            test_type=None):
 
         """Set up ABC for given model
         
@@ -265,7 +266,7 @@ class AbcProblem():
         get_p_transition = a function of t to calculate p_transition;
         abc_reactions: list of reaction IDs to be included;
         prior_dict: dictionary of predefined prior values for specific reactions (rxn ID is key);
-        rxn_enz_priors: a list with entries so - ['base_rxn_id',[gene_list],prior];
+        rel_priors: a list with entries so - ['base_rxn_id',[gene_list],prior];
         default_prior: default prior;
         include_all: if True, include all non-exchange reactions in the ABC
         
@@ -276,6 +277,8 @@ class AbcProblem():
         solver = solver or 'glpk'
         biomass_id = biomass_id or 'Biomass0'
         experiments_file = experiments_file or None
+        self.test_type = test_type or None
+        
         
         print("Loading model ...")
         if model_file:
@@ -344,7 +347,15 @@ class AbcProblem():
         self.w_set = None
         self.include_all=include_all
         self.default_prior_value=default_prior_value
-
+        
+        ## Separate reactions specified in rel_priors, to allow specification 
+        ## of individual REL priors
+        if rel_priors:
+            if not abc_reactions:
+                abc_reactions = []
+            for rxn_id, _, _ in rel_priors:
+                abc_reactions.append(rxn_id)
+        
         ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
         self.id_format = "{:0" + id_length + "d}"
@@ -401,19 +412,30 @@ class AbcProblem():
         for rxn_id in abc_reactions:        
             enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
             num_enzrxns = len(enzrxn_ids)
+            if num_enzrxns == 0:
+                num_enzrxns = 1
             if rxn_id in prior_dict:
                 prior_value = prior_dict[rxn_id]/sqrt(float(num_enzrxns))
             else:
-                prior_value = default_prior_value/sqrt(float(num_enzrxns))
-            for enzrxn_id in enzrxn_ids:
-                prior_dict[enzrxn_id] = prior_value
-            if non_enz_rxn_id:
-                prior_dict[non_enz_rxn_id] = self.default_prior_value
+                #prior_value = default_prior_value/sqrt(float(num_enzrxns))
+                prior_value = default_prior_value
+            if enzrxn_ids:
+                for enzrxn_id in enzrxn_ids:
+                    prior_dict[enzrxn_id] = prior_value
+                if non_enz_rxn_id:
+                    prior_dict[non_enz_rxn_id] = prior_value/100.0
+            else:        
+                if non_enz_rxn_id:
+                    prior_dict[non_enz_rxn_id] = self.default_prior_value
             counter.step()
         counter.stop()
-        
-        ## Apply belief about rxn/gene/enzyme relationships
-        prior_dict = self.set_rxn_enz_priors(rxn_enz_priors, prior_dict)
+
+
+        if rel_priors:
+            ## Apply belief about rxn/gene/enzyme relationships
+            print("Adding REL priors ...")
+            prior_dict = self.set_rel_priors(rel_priors, prior_dict)
+            print("REL priors added.")
         
         abc_running_total = len(prior_dict)
         print(" => {} RELs included".format(abc_running_total))
@@ -422,57 +444,58 @@ class AbcProblem():
         for rxn in self.model.reactions:
             rxn.lb_orig = deepcopy(rxn.lower_bound)
             rxn.ub_orig = deepcopy(rxn.upper_bound)
-               
-        ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
-        ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
-        prior_fn_value = 0.5  
-        counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
-        expt_num = 0
-        for expt in self.experiments:
-            expt_num += 1
-            expt_no_genotype = deepcopy(expt)
-            expt_no_genotype.genotype = []
-            if len(expt.genotype) == 1:
-                a, b, c, d, fn = expt.test(self.model)
-                #print expt_num, a, b, c, d, fn
-                if fn:
-#                     print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
-                    ## Which reaction is implicated?
-                    ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
-                    self.model.unset_genotype()
-                    if len(ko_rxns) == 0:
-#                         print (" - No KO rxns?!")
-                        pass
-                    elif len(ko_rxns) == 1:
-#                         print("One KO rxn: '{}'".format(ko_rxns[0].id))
-                        ko_rxns_essential = [ko_rxns[0].id]
-                    else:
-                        ## Find model-breaking reaction(s)
-                        ko_rxns_essential = []
-                        for rxn in ko_rxns:
-                            rxn.lower_bound = 0
-                            rxn.upper_bound = 0
-                            _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
-                            if fn_rxn:
-                                ko_rxns_essential.append(rxn.id)
-                            rxn.lower_bound = rxn.lb_orig
-                            rxn.upper_bound = rxn.ub_orig
-                    for rxn_id in ko_rxns_essential:
-                        try:
-                            ## Already in prior dict? Amend if new prior lower
-                            prior_val = prior_dict[rxn_id]
-#                             print(" => '{}' original prior = {}".format(rxn_id, prior_val))
-                            if prior_val > prior_fn_value:
-                                prior_dict[rxn_id] = prior_fn_value
-#                                 print(" => new prior = {}".format(prior_fn_value))
-                        except:
-                            ## Add to prior dict
-                            prior_dict[rxn_id] = prior_fn_value   
-#                             print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
-            counter.step()
-        counter.stop()
         
-        print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
+        
+#         ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
+#         ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
+#         prior_fn_value = 0.5  
+#         counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
+#         expt_num = 0
+#         for expt in self.experiments:
+#             expt_num += 1
+#             expt_no_genotype = deepcopy(expt)
+#             expt_no_genotype.genotype = []
+#             if len(expt.genotype) == 1:
+#                 a, b, c, d, fn = expt.test(self.model)
+#                 #print expt_num, a, b, c, d, fn
+#                 if fn:
+# #                     print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
+#                     ## Which reaction is implicated?
+#                     ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
+#                     self.model.unset_genotype()
+#                     if len(ko_rxns) == 0:
+# #                         print (" - No KO rxns?!")
+#                         pass
+#                     elif len(ko_rxns) == 1:
+# #                         print("One KO rxn: '{}'".format(ko_rxns[0].id))
+#                         ko_rxns_essential = [ko_rxns[0].id]
+#                     else:
+#                         ## Find model-breaking reaction(s)
+#                         ko_rxns_essential = []
+#                         for rxn in ko_rxns:
+#                             rxn.lower_bound = 0
+#                             rxn.upper_bound = 0
+#                             _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
+#                             if fn_rxn:
+#                                 ko_rxns_essential.append(rxn.id)
+#                             rxn.lower_bound = rxn.lb_orig
+#                             rxn.upper_bound = rxn.ub_orig
+#                     for rxn_id in ko_rxns_essential:
+#                         try:
+#                             ## Already in prior dict? Amend if new prior lower
+#                             prior_val = prior_dict[rxn_id]
+# #                             print(" => '{}' original prior = {}".format(rxn_id, prior_val))
+#                             if prior_val > prior_fn_value:
+#                                 prior_dict[rxn_id] = prior_fn_value
+# #                                 print(" => new prior = {}".format(prior_fn_value))
+#                         except:
+#                             ## Add to prior dict
+#                             prior_dict[rxn_id] = prior_fn_value   
+# #                             print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
+#             counter.step()
+#         counter.stop()
+#         
+#         print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
         
         ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
         if prior_multiplier:
@@ -634,11 +657,11 @@ class AbcProblem():
 # #         print(" => Results:\n")
 # #         initial_results.stats() 
 #         
-        ## Test full model
-        print("\nTesting full ABC model w/o particle ...")
-        initial_results, _ = conduct_experiments(self.model, self.experiments)
-        print(" => Results:\n")
-        initial_results.stats()         
+#         ## Test full model
+#         print("\nTesting full ABC model w/o particle ...")
+#         initial_results, _ = conduct_experiments(self.model, self.experiments)
+#         print(" => Results:\n")
+#         initial_results.stats()         
 
         if prior_multiplier:
             print 4
@@ -649,21 +672,27 @@ class AbcProblem():
         print("ABC initialisation complete.")
                 
     
-    def set_rxn_enz_priors(self, rxn_enz_priors, prior_dict, include_all=False):
+    def set_rel_priors(self, rel_priors, prior_dict, include_all=False):
         """Where there is belief about certain enzyme/reaction pairs, 
         apply this to the relevant reaction priors.
         """
         
-        if rxn_enz_priors:
-            for rxn_enz_prior in rxn_enz_priors:
-                base_rxn_id = rxn_enz_prior[0]
-                gene_set = set(rxn_enz_prior[1])
-                prior_value = rxn_enz_prior[2]
+        if rel_priors:
+            for rel_prior in rel_priors:
+                base_rxn_id = rel_prior[0]
+                print base_rxn_id
+                gene_set = set(rel_prior[1])
+                prior_value = rel_prior[2]
                 id_string = base_rxn_id + "(_enz[0-9]+)*$"
+                print id_string
                 for rxn in self.model.reactions:
                     if re.match(id_string, rxn.id):
-                        enzrxn_gene_set = set(rxn.genes)
+                        print("Found '{}' ...".format(rxn.id))
+                        enzrxn_gene_set = set(gene.id for gene in rxn.genes)
+                        print enzrxn_gene_set
+                        print gene_set
                         if (enzrxn_gene_set | gene_set) == (enzrxn_gene_set & gene_set):
+                            print("Adding prior value!")
                             prior_dict[rxn.id] = prior_value
         return prior_dict
 
@@ -810,7 +839,8 @@ class Particle():
             precalc_media,
             precalc_media_frozensets,
             prior_estimate,
-            essential_theta_sets):
+            essential_theta_sets,
+            test_type):
          
         self.theta_set_prev = theta_set_prev
         self.w_set_prev = w_set_prev
@@ -829,6 +859,7 @@ class Particle():
         self.precalc_media_frozensets = precalc_media_frozensets
         self.prior_estimate = prior_estimate
         self.essential_theta_sets = essential_theta_sets
+        self.test_type = test_type
         
         self.num_params = len(prior_set)
          
@@ -1000,7 +1031,10 @@ class Particle():
                 if debug:
                     sys.stdout.write("\rConducting experiments ...                         ")    
                     sys.stdout.flush()
-                self.conduct_experiments(debug=debug)
+                if self.test_type & (self.test_type == 'essential_and_orphan_mets'):
+                    self.conduct_experiments_essential_and_orphan_mets(debug=debug)
+                else:
+                    self.conduct_experiments(debug=debug)
                 sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
                 if self.result != 2:
                     sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
@@ -1252,6 +1286,87 @@ class Particle():
         self.result = distance
         return None
     
+    def conduct_experiments_essential_and_orphan_mets(self, debug=False, epsilon=None, verbose=False):
+        """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
+         
+        opt_cutoff = 1e-5
+        self.num_tests_checked = 0
+        self.num_tests_total = 0
+        if debug:
+            sys.stdout.write("\rChecking precalculated media ...                                     ")    
+            sys.stdout.flush()
+        ## Must run on all common media before experimental testing
+        for precalc_medium in self.precalc_media:
+            self.model.set_medium(precalc_medium)
+            if self.model.opt() <= opt_cutoff:
+                self.result = 2
+                if debug:
+                    print("Failed on precalc media")
+                return None 
+        if debug:
+            sys.stdout.write("\rCreating list of valid experiments ...                           ")    
+            sys.stdout.flush()
+        ## Check all genotypes for presence in model and create a list of valid experiments
+        valid_experiments = []
+        num_pos_remaining = 0
+        num_neg_remaining = 0
+        
+        gene_ids_in_model = self.model.get_relevant_gene_ids()
+        num_expts_essential = 0
+        for expt in self.experiments:
+            if expt.result == 0:
+                num_expts_essential += 1
+                all_genes_present = True
+                for gene in expt.genotype:
+                    if gene not in gene_ids_in_model:
+                        all_genes_present = False
+                        break
+                if all_genes_present:
+                    valid_experiments.append(expt)
+                    if expt.result == 1:
+                        num_pos_remaining += 1
+                    else:
+                        num_neg_remaining += 1
+         
+        self.num_tests_total = len(valid_experiments)
+        print("{} valid experiments ...".format(len(valid_experiments)))
+        
+        
+#         N.B. Leave for now since model orphans not so easy with split RELs
+#         num_orphans = 0
+#         for metabolite in self.model.metabolites:
+#             if len(metabolite.reactions) == 1:
+#                 num_orphans += 1
+#         num_mets_ijo = len(self.model.metabolites)
+#         orphan_proportion = 1.0*num_orphans/num_mets_ijo
+#         
+        if verbose:
+            print("Beginning tests ...")
+        
+        counter = loop_counter(len(valid_experiments), "Testing experiments")
+        num_tn = 0
+        num_fp = 0
+        num_tests_remaining = len(valid_experiments)
+        for experiment in valid_experiments:
+            _, _, tn_add, fp_add, _ = experiment.test(self.model, self.precalc_media_frozensets)
+            num_tn += tn_add
+            num_fp += fp_add
+            num_tests_remaining -= 1
+            
+            ## If it is impossible to get below epsilon with all following 
+            ## tests correct, stop early
+            if fp_add > 0:
+                max_correct_predictions = num_tn + num_tests_remaining
+                max_proportion = 1.0 * max_correct_predictions/self.num_tests_total
+                d_min = 1 - max_proportion
+                if d_min > self.epsilon:
+                    break
+            counter.step()        
+        counter.stop()
+        distance = 1.0 * num_fp / self.num_tests_total
+        self.result = distance
+        return None
+    
 
 
 
@@ -1490,7 +1605,7 @@ class ExtendedCobraModel(ArrayBasedModel):
         if len(gpr_list) > enzyme_limit:
             return [rxn.id], None
         elif len(gpr_list) == 0:
-            return [rxn.id], None
+            return None, rxn.id
         enzyme_index = 0
         enzrxn_id_list = []
         for gpr in gpr_list:
