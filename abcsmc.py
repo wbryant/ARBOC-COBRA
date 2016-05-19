@@ -498,11 +498,10 @@ class AbcProblem():
 #         print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
         
         ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
-        if prior_multiplier:
+        if prior_multiplier or (prior_multiplier == 0):
             print("Using prior multiplier ...")
             for rxn_id, prior_val in prior_dict.iteritems():
                 prior_val_new = prior_val + (1.0-prior_val)*prior_multiplier
-                #print(" => {}\t{}\t{}".format(rxn_id,prior_val,prior_val_new))
                 prior_dict[rxn_id] = prior_val_new
             
         ## All beliefs about reactions included in the model are now in prior_dict.
@@ -513,7 +512,6 @@ class AbcProblem():
         idx = -1
         for rxn_id, prior_value in prior_dict.iteritems():
             idx += 1
-            #print rxn_id, prior_value
             self.prior_set[idx] = prior_value
             self.model.theta_rxn_map[idx] = self.model.reactions.get_by_id(rxn_id)
             rxn_theta_map[rxn_id] = idx
@@ -578,12 +576,6 @@ class AbcProblem():
         else:
             print("... done.")
 
-        if prior_multiplier:
-            print 2
-            print "Prior_estimate: ", self.prior_estimate
-            print "Prior_set: ", self.prior_set
-
-            
         essential_abc_reaction_sets = []
         count_rxn_lists = loop_counter(
             len(abc_reaction_lists),
@@ -608,9 +600,6 @@ class AbcProblem():
         count_rxn_lists.stop()
         print(" => {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
         
-        #self.abc_reaction_lists = abc_reaction_lists             
-        #self.essential_reaction_sets = essential_abc_reaction_sets
-        
         ## CONVERT REACTION SETS TO THETA SUBSETS - IF ONLY A SINGLE THETA, SET PRIOR TO ONE!
         essential_theta_sets = []
         for rxn_list in essential_abc_reaction_sets:
@@ -625,12 +614,6 @@ class AbcProblem():
         
         self.essential_theta_sets = essential_theta_sets
 
-        if prior_multiplier:
-            print 3
-            print "Prior_estimate: ", self.prior_estimate
-            print "Prior_set: ", self.prior_set
-
-        
         ## FIND BLOCKED REACTIONS AND SET BOUNDS TO 0
         print("Setting bounds of blocked reactions to 0 ...")
         blocked_rxn_ids = find_blocked_reactions(self.model, open_exchanges=True)
@@ -663,11 +646,10 @@ class AbcProblem():
 #         print(" => Results:\n")
 #         initial_results.stats()         
 
-        if prior_multiplier:
-            print 4
-            print "Prior_estimate: ", self.prior_estimate
-            print "Prior_set: ", self.prior_set
-
+#         if prior_multiplier:
+#             print 4
+#             print "Prior_estimate: ", self.prior_estimate
+#             print "Prior_set: ", self.prior_set
         
         print("ABC initialisation complete.")
                 
