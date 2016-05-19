@@ -517,11 +517,6 @@ class AbcProblem():
             rxn_theta_map[rxn_id] = idx
         self.prior_estimate = deepcopy(self.prior_set)
         
-        if prior_multiplier:
-            print 1
-            print "Prior_estimate: ", self.prior_estimate
-            print "Prior_set: ", self.prior_set
-            
         ## Calculate ln_pi_max for calculation of pi_rel in weight calculations
         ln_pi_max = 0
         for p in self.prior_set:
@@ -600,7 +595,8 @@ class AbcProblem():
         count_rxn_lists.stop()
         print(" => {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
         
-        ## CONVERT REACTION SETS TO THETA SUBSETS - IF ONLY A SINGLE THETA, SET PRIOR TO ONE!
+        ## CONVERT ESSENTIAL REACTION SETS TO THETA SUBSETS - IF ONLY A SINGLE
+        ## THETA, SET PRIOR TO ONE!
         essential_theta_sets = []
         for rxn_list in essential_abc_reaction_sets:
             if len(rxn_list) == 1:
@@ -658,23 +654,16 @@ class AbcProblem():
         """Where there is belief about certain enzyme/reaction pairs, 
         apply this to the relevant reaction priors.
         """
-        
         if rel_priors:
             for rel_prior in rel_priors:
                 base_rxn_id = rel_prior[0]
-                print base_rxn_id
                 gene_set = set(rel_prior[1])
                 prior_value = rel_prior[2]
                 id_string = base_rxn_id + "(_enz[0-9]+)*$"
-                print id_string
                 for rxn in self.model.reactions:
                     if re.match(id_string, rxn.id):
-                        print("Found '{}' ...".format(rxn.id))
                         enzrxn_gene_set = set(gene.id for gene in rxn.genes)
-                        print enzrxn_gene_set
-                        print gene_set
                         if (enzrxn_gene_set | gene_set) == (enzrxn_gene_set & gene_set):
-                            print("Adding prior value!")
                             prior_dict[rxn.id] = prior_value
         return prior_dict
 
@@ -995,12 +984,7 @@ class Particle():
             for essential_theta_set in self.essential_theta_sets:
                 if essential_theta_set.issubset(excluded_theta_set):
                     running_model=False
-#                     if debug:
-#                         print essential_theta_set
-#             
-#             if debug:
-#                 print("")
-            
+           
             if running_model:
                 if debug:
                     sys.stdout.write("\rApplying proposed theta ...                        ")    
@@ -1479,37 +1463,24 @@ class Experiment():
         elif change_to_model == -1:
             ## Gene is not in model.
             return -2,0,0,0,0
-
-#         sys.stdout.write("\rOptimising ...                                    ")    
-#         sys.stdout.flush()
-        
         model_growth = timeout(ec_model.opt, default=0)
         ec_model.unset_genotype()
         tp = 0
         tn = 0
         fp = 0
         fn = 0
-        
-#         sys.stdout.write("\rDone optimising ...                               ")    
-#         sys.stdout.flush()        
-        
         if (model_growth > opt_cutoff) and (self.result > 0):
             tp = 1
             expt_result = 1
         elif (model_growth <= opt_cutoff) and (self.result == 0):
             expt_result = 1
             tn = 1
-#         elif (model_growth < 0):
-#             expt_result = -1            
         else:
             expt_result = 0
             if self.result > 0:
                 fn = 1
             else:
                 fp = 1
-            
-            
-#         print("%3s (%d): %d" % (self.id, self.result, answer))
         return expt_result, tp, tn, fp, fn
         
 def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_solver=True, solver='cglpk',tidy_ids=True):
