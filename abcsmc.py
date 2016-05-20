@@ -237,7 +237,6 @@ class AbcProblem():
             particles_per_population,
             num_populations_max,
             model=None,
-            abc_reactions = None,
             prior_dict = None,
             rel_priors = None,
             default_prior_value = 0.99,
@@ -279,7 +278,6 @@ class AbcProblem():
         experiments_file = experiments_file or None
         self.test_type = test_type or None
         
-        
         print("Loading model ...")
         if model_file:
             self.model = create_extended_model(model_file,biomass_id,solver=solver)
@@ -298,6 +296,7 @@ class AbcProblem():
             print("Experiments not specified, exiting ...")
             sys.exit(1)
         
+        
 #         if original_model_rxn_ids:
 #             ## Test original model
 #             print("Testing original model ...")
@@ -311,11 +310,11 @@ class AbcProblem():
 #             original_results.stats()    
 #                 
 # 
-#         ## Test full model
-#         print("Testing full model ...")
-#         initial_results, _ = conduct_experiments(self.model, self.experiments)
-#         print(" => Results:\n")
-#         initial_results.stats()        
+        ## Test full model
+        print("Testing full model ...")
+        initial_results, _ = conduct_experiments(self.model, self.experiments)
+        print(" => Results:\n")
+        initial_results.stats()        
         
         
         
@@ -347,12 +346,11 @@ class AbcProblem():
         self.w_set = None
         self.include_all=include_all
         self.default_prior_value=default_prior_value
+        abc_reactions = []
         
         ## Separate reactions specified in rel_priors, to allow specification 
         ## of individual REL priors
         if rel_priors:
-            if not abc_reactions:
-                abc_reactions = []
             for rxn_id, _, _ in rel_priors:
                 abc_reactions.append(rxn_id)
         
@@ -367,16 +365,12 @@ class AbcProblem():
         self.thetas_selected = []
         self.intermediate_theta_dict = {}
         
-
         if self.include_all:
             print("Including all non-exchange reactions")
-            abc_reactions = []
             for reaction in self.model.reactions:
                 if not reaction.id.startswith('EX_'):
                     abc_reactions.append(reaction.id)
             print("\t{} reactions in total".format(len(abc_reactions)))
-        else:
-            abc_reactions = abc_reactions or []
         print("Pre-priors: {} reactions included".format(len(abc_reactions)))
         print("Loading prior values ...")
         model_reaction_ids = [reaction.id for reaction in self.model.reactions]
@@ -628,6 +622,20 @@ class AbcProblem():
         print(" => {} reactions had bounds restricted to 0.".format(num_restricted))
         
         
+        num_essential_expts = None
+        if not(not(self.test_type)) & (self.test_type == 'essential_and_orphan_mets'):        
+            # get genes in model
+            gene_set_all = [gene.id for gene in self.model.genes]
+            num_essential_expts = 0
+            for expt in self.experiments:
+                if expt.result == 0:
+                    gene_set = set(expt.genotype)
+                    if gene_set.issubset(gene_set_all):
+                        num_essential_expts += 1
+            print("There are {} experiments showing essentiality".format(num_essential_expts))
+        self.num_essential_expts = num_essential_expts
+        
+        
 #         ## Test full model balanced accuracy
 #         print("Testing full ABC model ...")
 #         particle_full = self.initialise_particle(0)
@@ -636,17 +644,12 @@ class AbcProblem():
 # #         print(" => Results:\n")
 # #         initial_results.stats() 
 #         
-#         ## Test full model
-#         print("\nTesting full ABC model w/o particle ...")
-#         initial_results, _ = conduct_experiments(self.model, self.experiments)
-#         print(" => Results:\n")
-#         initial_results.stats()         
-
-#         if prior_multiplier:
-#             print 4
-#             print "Prior_estimate: ", self.prior_estimate
-#             print "Prior_set: ", self.prior_set
-        
+        ## Test full model
+        print("\nTesting full ABC model w/o particle ...")
+        initial_results, _ = conduct_experiments(self.model, self.experiments)
+        print(" => Results:\n")
+        initial_results.stats()         
+       
         print("ABC initialisation complete.")
                 
     
@@ -687,7 +690,9 @@ class AbcProblem():
             self.precalc_media,
             self.precalc_media_frozensets,
             self.prior_estimate,
-            self.essential_theta_sets)
+            self.essential_theta_sets,
+            self.test_type,
+            self.num_essential_expts)
         
         return particle
     
@@ -811,7 +816,8 @@ class Particle():
             precalc_media_frozensets,
             prior_estimate,
             essential_theta_sets,
-            test_type):
+            test_type,
+            num_essential_expts):
          
         self.theta_set_prev = theta_set_prev
         self.w_set_prev = w_set_prev
@@ -831,6 +837,7 @@ class Particle():
         self.prior_estimate = prior_estimate
         self.essential_theta_sets = essential_theta_sets
         self.test_type = test_type
+        self.num_essential_expts = num_essential_expts
         
         self.num_params = len(prior_set)
          
@@ -841,9 +848,14 @@ class Particle():
         self.weight = None
         self.full_results = None
         self.result = None
-         
+        
+        self.verbose = False
+        
         return None
-
+    
+    def vprint(self, string):
+        if self.verbose:
+            print(string)
          
     def propose_theta(self):
         """Sample theta from previous iteration and perturb according to K_t."""
@@ -986,30 +998,16 @@ class Particle():
                     running_model=False
            
             if running_model:
-                if debug:
-                    sys.stdout.write("\rApplying proposed theta ...                        ")    
-                    sys.stdout.flush()
                 self.apply_proposed_theta()
-                
-                sys.stdout.write("\rConducting experiments ...                         ")    
-                sys.stdout.flush()
-                
-                if debug:
-                    sys.stdout.write("\rConducting experiments ...                         ")    
-                    sys.stdout.flush()
-                if self.test_type & (self.test_type == 'essential_and_orphan_mets'):
+                if not(not(self.test_type)) & (self.test_type == 'essential_and_orphan_mets'):
                     self.conduct_experiments_essential_and_orphan_mets(debug=debug)
                 else:
                     self.conduct_experiments(debug=debug)
-                sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
-                if self.result != 2:
-                    sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
-                sys.stdout.flush() 
                 if debug:
                     sys.stdout.write("\rresult = {:.3f}                                    ".format(self.result))
                     if self.result != 2:
                         sys.stdout.write(" after {}/{} tests".format(self.num_tests_checked, self.num_tests_total))
-                    sys.stdout.flush()
+                    sys.stdout.flush() 
             else:
                 self.result = 3
                 if debug:
@@ -1018,23 +1016,22 @@ class Particle():
             ## If model is close enough to experiments, accept and return theta and calculated weight
             if self.result == 2:
                 failed_precalc += 1
+                self.vprint("result = 2")
             elif self.result == 3:
                 failed_theta_sets += 1
-                if debug:
-                    if failed_theta_sets > 50:
-                        print("Too many failed, exiting ...")
-                        return -1,-1,-1,-1
+                self.vprint("result = 3")
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
-                sys.stdout.write("\n{} total attempts".format(count_attempts))
-                sys.stdout.write("\n{} failed on precalc".format(failed_precalc))
-                sys.stdout.write("\n{} failed on theta sets".format(failed_theta_sets))
+                self.vprint("Accepted particle (epsilon = {}):".format(self.result))
+                self.vprint(" => {} total attempts".format(count_attempts))
+                self.vprint(" => {} failed on precalc".format(failed_precalc))
+                self.vprint(" => {} failed on theta sets".format(failed_theta_sets))
+                sys.stdout.write(".")
                 sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
             else:
-                if debug:
-                    print("epsilon = {}".format(self.result))
+                print("epsilon = {}".format(self.result))
     
     def perturb_param_using_prior(self, idx):
         """Return p_transition based on current prior estimate for REL idx."""
@@ -1252,26 +1249,21 @@ class Particle():
         self.result = distance
         return None
     
-    def conduct_experiments_essential_and_orphan_mets(self, debug=False, epsilon=None, verbose=False):
+    def conduct_experiments_essential_and_orphan_mets(self, debug=False, epsilon=None):
         """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
          
         opt_cutoff = 1e-5
         self.num_tests_checked = 0
         self.num_tests_total = 0
-        if debug:
-            sys.stdout.write("\rChecking precalculated media ...                                     ")    
-            sys.stdout.flush()
+        self.vprint("\rChecking precalculated media ...                                     ")    
         ## Must run on all common media before experimental testing
         for precalc_medium in self.precalc_media:
             self.model.set_medium(precalc_medium)
+            self.vprint(" => precalc: {}".format(self.model.opt()))
             if self.model.opt() <= opt_cutoff:
                 self.result = 2
-                if debug:
-                    print("Failed on precalc media")
+                self.vprint("Failed on precalc media")
                 return None 
-        if debug:
-            sys.stdout.write("\rCreating list of valid experiments ...                           ")    
-            sys.stdout.flush()
         ## Check all genotypes for presence in model and create a list of valid experiments
         valid_experiments = []
         num_pos_remaining = 0
@@ -1295,7 +1287,7 @@ class Particle():
                         num_neg_remaining += 1
          
         self.num_tests_total = len(valid_experiments)
-        print("{} valid experiments ...".format(len(valid_experiments)))
+        self.vprint("\n{} valid experiments ...".format(len(valid_experiments)))
         
         
 #         N.B. Leave for now since model orphans not so easy with split RELs
@@ -1306,30 +1298,46 @@ class Particle():
 #         num_mets_ijo = len(self.model.metabolites)
 #         orphan_proportion = 1.0*num_orphans/num_mets_ijo
 #         
-        if verbose:
-            print("Beginning tests ...")
+        self.vprint("Beginning tests ...")
         
-        counter = loop_counter(len(valid_experiments), "Testing experiments")
+#         counter = loop_counter(len(valid_experiments), "Testing experiments")
         num_tn = 0
         num_fp = 0
         num_tests_remaining = len(valid_experiments)
+        self.num_tests_checked = 0
         for experiment in valid_experiments:
             _, _, tn_add, fp_add, _ = experiment.test(self.model, self.precalc_media_frozensets)
+            self.num_tests_checked += 1
             num_tn += tn_add
             num_fp += fp_add
             num_tests_remaining -= 1
+                
+            max_distance = 1.0 - (1.0 * num_tn) / self.num_essential_expts
+            min_distance = 1.0 - (1.0 * num_tn + num_tests_remaining)/self.num_essential_expts
             
-            ## If it is impossible to get below epsilon with all following 
-            ## tests correct, stop early
-            if fp_add > 0:
-                max_correct_predictions = num_tn + num_tests_remaining
-                max_proportion = 1.0 * max_correct_predictions/self.num_tests_total
-                d_min = 1 - max_proportion
-                if d_min > self.epsilon:
-                    break
-            counter.step()        
-        counter.stop()
-        distance = 1.0 * num_fp / self.num_tests_total
+            self.vprint("{}\t{}\t{}".format(num_tests_remaining,min_distance, max_distance))
+            
+            if min_distance > self.epsilon:
+                self.vprint("Minimum distance > epsilon, aborting ...")
+                self.result = min_distance
+                return None
+            if max_distance < self.epsilon:
+                self.vprint("Maximum distance < epsilon, finishing ...")
+                self.result = min_distance
+                return None
+            
+#             ## If it is impossible to get below epsilon with all following 
+#             ## tests correct, stop early
+#             if fp_add > 0:
+#                 max_correct_predictions = num_tn + num_tests_remaining
+#                 max_proportion = 1.0 * max_correct_predictions/self.num_essential_expts
+#                 d_min = 1 - max_proportion
+#                 if d_min > self.epsilon:
+#                     print("Too far away")
+#                     break
+#             counter.step()        
+#         counter.stop()
+        distance = 1.0 - num_tn / self.num_essential_expts
         self.result = distance
         return None
     
@@ -1558,7 +1566,7 @@ class ExtendedCobraModel(ArrayBasedModel):
         if len(gpr_list) > enzyme_limit:
             return [rxn.id], None
         elif len(gpr_list) == 0:
-            return None, rxn.id
+            return [], rxn.id
         enzyme_index = 0
         enzrxn_id_list = []
         for gpr in gpr_list:
