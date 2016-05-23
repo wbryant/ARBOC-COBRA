@@ -6,6 +6,7 @@ Created on 10 Dec 2014
 
 import sys
 from time import time
+from time import sleep as wait
 import re
 from math import floor
 
@@ -149,50 +150,6 @@ class ResultSet:
                 self.fn
             ))
              
-            
-
-
-class loop_counter_old:
-    """Use to track progress of a loop of known length."""
-    
-    def __init__(self, length, message = 'Entering loop', timed = False):
-        self.stopped = False
-        self.length = length
-        self.num_done = 0
-        self.next_progress = 1
-        self.timed = timed
-        if self.timed:
-            self.time_0 = time()
-        print("{}:".format(message))
-        sys.stdout.write("\r - %d %%" % self.num_done)
-        sys.stdout.flush()
-    
-    def step(self):
-        self.num_done += 1
-        if not self.stopped:
-            if self.num_done >= self.length:
-                self.stop()
-            elif (((100 * self.num_done) / self.length) >= self.next_progress):
-                if self.length > 100:
-                    sys.stdout.write("\r - %d %%  (%d / %d)" % (self.next_progress, self.num_done, self.length))
-                else:
-                    percent_done = int(100*self.num_done/float(self.length))
-                    sys.stdout.write("\r - %d %%  (%d / %d)" % (percent_done, self.num_done, self.length))
-#                 if self.timed:
-#                     time_n = time()
-#                     sys.stdout.write(" - {} seconds".format(time_n-self.time_0))
-                sys.stdout.flush()
-                self.next_progress += 1
-                
-    def stop(self):
-        if not self.stopped:
-            sys.stdout.write("\r - 100 %\n")
-            self.stopped = True
-#             if self.timed:
-#                 time_n = time()
-#                 sys.stdout.write(" taking {} seconds.\n".format(time_n-self.time_0))
-            sys.stdout.flush()
-
 def recast_var(var, object_to_change):
     #Return var recast into object's type
     obj_type = str(type(object_to_change)).split("'")[1]
@@ -209,18 +166,24 @@ def recast_var(var, object_to_change):
 class loop_counter:
     """Use to track progress of a loop of known length."""
     
-    def __init__(self, length, message = 'Entering loop', timed = False):
+    def __init__(self, length, message = 'Entering loop', timed=False, add_delay=False):
         self.stopped = False
         self.length = length
         self.num_done = 0
         self.next_progress = 1
         self.percent_done = 0
         self.timed = timed
+        self.add_delay = add_delay
         if self.timed:
             self.time_0 = time()
         print("{}:".format(message))
-        sys.stdout.write("\r - %d %%" % self.num_done)
-        sys.stdout.flush()
+        try:
+            if self.add_delay:
+                wait(0.001)
+            sys.stdout.write("\r - 0 %%")
+            sys.stdout.flush()
+        except:
+            pass
     
     def step(self):
         self.num_done += 1
@@ -229,21 +192,28 @@ class loop_counter:
                 self.stop()
             else:
                 percent_done = floor(1000.0*self.num_done/self.length)/10
-                sys.stdout.write("\r - {} % ({} / {})".format(
-                    percent_done,
-                    self.num_done,
-                    self.length
-                ))
-                sys.stdout.flush()
+                try:
+                    if self.add_delay:
+                        wait(0.001)
+                    sys.stdout.write("\r - {} % ({} / {})".format(
+                        percent_done,
+                        self.num_done,
+                        self.length
+                    ))
+                    sys.stdout.flush()
+                except:
+                    pass
                 
     def stop(self):
         if not self.stopped:
-            sys.stdout.write("\r - 100 % ({})                        \n"
-                .format(self.length))
+            try:
+                if self.add_delay:
+                    wait(0.001)
+                sys.stdout.write("\r - 100 % ({})                        \n"
+                    .format(self.length))
+            except:
+                pass
             self.stopped = True
-#             if self.timed:
-#                 time_n = time()
-#                 sys.stdout.write(" taking {} seconds.\n".format(time_n-self.time_0))
             sys.stdout.flush()
 
 
