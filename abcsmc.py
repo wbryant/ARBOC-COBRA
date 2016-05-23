@@ -157,7 +157,8 @@ class AbcProblem():
             original_model_rxn_ids=None,
             solver=None,
             prior_multiplier=None,
-            test_type=None):
+            test_type=None,
+            test_model_pre_abc=None):
 
         """Set up ABC for given model
         
@@ -179,6 +180,7 @@ class AbcProblem():
         biomass_id = biomass_id or 'Biomass0'
         experiments_file = experiments_file or None
         self.test_type = test_type or None
+        test_model_pre_abc = test_model_pre_abc or False
         
         print("Loading model ...")
         if model_file:
@@ -199,24 +201,24 @@ class AbcProblem():
             sys.exit(1)
         
         
-#         if original_model_rxn_ids:
-#             ## Test original model
-#             print("Testing original model ...")
-#             model_orig = deepcopy(self.model)
-#             for reaction in model_orig.reactions:
-#                 if reaction.id not in original_model_rxn_ids:
-#                     reaction.remove_from_model()
-#             model.repair()     
-#             original_results, _ = conduct_experiments(model_orig, self.experiments)
-#             print(" => Results:\n")
-#             original_results.stats()    
-#                 
-# 
-        ## Test full model
-        print("Testing full model ...")
-        initial_results, _ = conduct_experiments(self.model, self.experiments)
-        print(" => Results:\n")
-        initial_results.stats()        
+        if original_model_rxn_ids:
+            ## Test original model
+            print("Testing original model ...")
+            model_orig = deepcopy(self.model)
+            for reaction in model_orig.reactions:
+                if reaction.id not in original_model_rxn_ids:
+                    reaction.remove_from_model()
+            model.repair()     
+            original_results, _ = conduct_experiments(model_orig, self.experiments)
+            print(" => Results:\n")
+            original_results.stats()    
+                 
+        if test_model_pre_abc:
+            ## Test full model
+            print("Testing full model ...")
+            initial_results, _ = conduct_experiments(self.model, self.experiments)
+            print(" => Results:\n")
+            initial_results.stats()        
         
         
         
@@ -342,56 +344,56 @@ class AbcProblem():
             rxn.ub_orig = deepcopy(rxn.upper_bound)
         
         
-#         ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
-#         ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
-#         prior_fn_value = 0.5  
-#         counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
-#         expt_num = 0
-#         for expt in self.experiments:
-#             expt_num += 1
-#             expt_no_genotype = deepcopy(expt)
-#             expt_no_genotype.genotype = []
-#             if len(expt.genotype) == 1:
-#                 a, b, c, d, fn = expt.test(self.model)
-#                 #print expt_num, a, b, c, d, fn
-#                 if fn:
-# #                     print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
-#                     ## Which reaction is implicated?
-#                     ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
-#                     self.model.unset_genotype()
-#                     if len(ko_rxns) == 0:
-# #                         print (" - No KO rxns?!")
-#                         pass
-#                     elif len(ko_rxns) == 1:
-# #                         print("One KO rxn: '{}'".format(ko_rxns[0].id))
-#                         ko_rxns_essential = [ko_rxns[0].id]
-#                     else:
-#                         ## Find model-breaking reaction(s)
-#                         ko_rxns_essential = []
-#                         for rxn in ko_rxns:
-#                             rxn.lower_bound = 0
-#                             rxn.upper_bound = 0
-#                             _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
-#                             if fn_rxn:
-#                                 ko_rxns_essential.append(rxn.id)
-#                             rxn.lower_bound = rxn.lb_orig
-#                             rxn.upper_bound = rxn.ub_orig
-#                     for rxn_id in ko_rxns_essential:
-#                         try:
-#                             ## Already in prior dict? Amend if new prior lower
-#                             prior_val = prior_dict[rxn_id]
-# #                             print(" => '{}' original prior = {}".format(rxn_id, prior_val))
-#                             if prior_val > prior_fn_value:
-#                                 prior_dict[rxn_id] = prior_fn_value
-# #                                 print(" => new prior = {}".format(prior_fn_value))
-#                         except:
-#                             ## Add to prior dict
-#                             prior_dict[rxn_id] = prior_fn_value   
-# #                             print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
-#             counter.step()
-#         counter.stop()
-#         
-#         print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
+        ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
+        ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
+        prior_fn_value = 0.5  
+        counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
+        expt_num = 0
+        for expt in self.experiments:
+            expt_num += 1
+            expt_no_genotype = deepcopy(expt)
+            expt_no_genotype.genotype = []
+            if len(expt.genotype) == 1:
+                a, b, c, d, fn = expt.test(self.model)
+                #print expt_num, a, b, c, d, fn
+                if fn:
+#                     print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
+                    ## Which reaction is implicated?
+                    ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
+                    self.model.unset_genotype()
+                    if len(ko_rxns) == 0:
+#                         print (" - No KO rxns?!")
+                        pass
+                    elif len(ko_rxns) == 1:
+#                         print("One KO rxn: '{}'".format(ko_rxns[0].id))
+                        ko_rxns_essential = [ko_rxns[0].id]
+                    else:
+                        ## Find model-breaking reaction(s)
+                        ko_rxns_essential = []
+                        for rxn in ko_rxns:
+                            rxn.lower_bound = 0
+                            rxn.upper_bound = 0
+                            _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
+                            if fn_rxn:
+                                ko_rxns_essential.append(rxn.id)
+                            rxn.lower_bound = rxn.lb_orig
+                            rxn.upper_bound = rxn.ub_orig
+                    for rxn_id in ko_rxns_essential:
+                        try:
+                            ## Already in prior dict? Amend if new prior lower
+                            prior_val = prior_dict[rxn_id]
+#                             print(" => '{}' original prior = {}".format(rxn_id, prior_val))
+                            if prior_val > prior_fn_value:
+                                prior_dict[rxn_id] = prior_fn_value
+#                                 print(" => new prior = {}".format(prior_fn_value))
+                        except:
+                            ## Add to prior dict
+                            prior_dict[rxn_id] = prior_fn_value   
+#                             print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
+            counter.step()
+        counter.stop()
+         
+        print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
         
         ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
         if prior_multiplier or (prior_multiplier == 0):
@@ -452,20 +454,21 @@ class AbcProblem():
                     rxn_list.append(reaction)
             abc_reaction_lists.append(rxn_list)
         
-        print("Testing full model with precalculated media ...")
-        for medium in self.precalc_media:
-            self.model.set_medium(medium)
-            precalc_fail = False
-            if self.model.opt() < 1e-5:
-                precalc_fail = True
-                print("Initial model did not run on precalc medium:")
-                for met, _ in medium.iteritems():
-                    print(" - {}".format(met))
-        if precalc_fail:
-            print("Failed on precalc media, exiting ...")
-            sys.exit(1)
-        else:
-            print("... done.")
+        if test_model_pre_abc:
+            print("Testing full model with precalculated media ...")
+            for medium in self.precalc_media:
+                self.model.set_medium(medium)
+                precalc_fail = False
+                if self.model.opt() < 1e-5:
+                    precalc_fail = True
+                    print("Initial model did not run on precalc medium:")
+                    for met, _ in medium.iteritems():
+                        print(" - {}".format(met))
+            if precalc_fail:
+                print("Failed on precalc media, exiting ...")
+                sys.exit(1)
+            else:
+                print("... done.")
 
         essential_abc_reaction_sets = []
         count_rxn_lists = loop_counter(
@@ -545,12 +548,13 @@ class AbcProblem():
 #         print(" => balanced accuracy = {}".format(1.0-particle_full.result))
 # #         print(" => Results:\n")
 # #         initial_results.stats() 
-#         
-        ## Test full model
-        print("\nTesting full ABC model w/o particle ...")
-        initial_results, _ = conduct_experiments(self.model, self.experiments)
-        print(" => Results:\n")
-        initial_results.stats()         
+
+        if test_model_pre_abc:
+            ## Test full model
+            print("\nTesting full ABC model ...")
+            initial_results, _ = conduct_experiments(self.model, self.experiments)
+            print(" => Results:\n")
+            initial_results.stats()         
        
         print("ABC initialisation complete.")
                 
