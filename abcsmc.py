@@ -5,15 +5,10 @@ Created on 10 Mar 2014
 '''
 from cobra.flux_analysis import find_blocked_reactions
 from cobra.core import ArrayBasedModel
-try:
-    from cobra.io import write_sbml_model
-except:
-    from cobra.io.sbml import write_cobra_model_to_sbml_file as write_sbml_model
 from cobra.io.sbml import create_cobra_model_from_sbml_file 
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
-from cobra import Reaction, Metabolite
 from local_gene_parser import gene_parser
-from local_utils import *
+from local_utils import loop_counter, ResultSet
 import numpy as np
 from numpy import log as ln
 from copy import deepcopy
@@ -21,20 +16,16 @@ from random import random
 from math import sqrt, log10, ceil, exp
 import shelve
 from collections import Counter
-from time import sleep as wait
+import sys, re
 
 def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
-#     sys.stdout.write("\rentered timeout ...                       ")
-#     sys.stdout.flush()
-    
+    """Run func, but exit after timeout_duration if func hasn't completed.
+    """
     import signal
-    
     class TimeoutError(Exception):
         pass
-
     def handler(signum, frame):
         raise TimeoutError()
-
     # set the timeout handler
     signal.signal(signal.SIGALRM, handler) 
     signal.alarm(timeout_duration)
@@ -45,69 +36,7 @@ def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
         result = default
     finally:
         signal.alarm(0)
-    
-#     sys.stdout.write("\rexiting timeout ...                         ")
-#     sys.stdout.flush()
     return result
-
-def conduct_experiments_single(model, experiments):
-    """Conduct experiments for model in current state and return ResultSet of results."""
-
-    ## Check all genotypes for presence in model and create a list of valid experiments
-    valid_experiments = []
-    num_pos_remaining = 0
-    num_neg_remaining = 0
-    gene_ids_in_model = model.get_relevant_gene_ids()
-#     for gene_id in sorted(gene_ids_in_model):
-#         print gene_id
-    for idx, expt in enumerate(experiments):
-#         print idx+1, expt.genotype
-        all_genes_present = True
-        for gene in expt.genotype:
-            if gene not in gene_ids_in_model:
-#                 print(" - '{}' not present in model ...".format(gene))
-                all_genes_present = False
-                break
-#             else:
-#                 print(" - '{}' present in model ...".format(gene))
-        if all_genes_present:
-            valid_experiments.append(expt)
-            if expt.result == 1:
-                num_pos_remaining += 1
-            else:
-                num_neg_remaining += 1
-     
-    num_tests_total = len(valid_experiments)
-    print("\n{} valid experiments ...".format(len(valid_experiments)))
-    num_failed_tests = 0
-    num_succeeded_tests = 0 
-    tp = 0
-    tn = 0
-    fp = 0
-    fn = 0
-    running_results = ResultSet(0,0,0,0)
-    counter = loop_counter(len(valid_experiments), "Testing experiments")
-    
-    for idx, experiment in enumerate(valid_experiments):
-        expt_result, tp_add, tn_add, fp_add, fn_add = experiment.test(model)
-        running_results.tp += tp_add
-        running_results.tn += tn_add
-        running_results.fp += fp_add
-        running_results.fn += fn_add
-        counter.step()
-#         if experiment.result == 1:
-#             num_pos_remaining -= 1
-#         else:
-#             num_neg_remaining -= 1
-#         
-#         if expt_result == 1:
-#             num_succeeded_tests += 1
-#         if (expt_result != 1) and (expt_result != -2):
-#             num_failed_tests += 1
-        
-    counter.stop()
-    return running_results
-
 
 def import_prior_dict(
         prior_files,
@@ -204,33 +133,6 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file=
     expts_in.close()
     return experiments
  
-
-def import_rxn_ids_from_file(file_in, criterion = None):
-    """Import rxn IDs from the first column in file_in.
-    Filter by criterion value in the second column, if specified.
-    """
-    
-    f_in = open(file_in, 'r')
-    
-    rxn_ids = []
-    
-    line_num = 0
-    
-    for line in f_in:
-        line_num += 1
-        rxn_id = line.split("\t")[0].strip()
-        if criterion is not None:
-            try:
-                if line.split("\t")[1].strip() == criterion:
-                    rxn_ids.append(rxn_id)
-            except:
-                print line_num, ": '", line, "'"      
-        else:
-            rxn_ids.append(rxn_id)
-    f_in.close()
-    
-    return rxn_ids      
-
 class AbcProblem():
     
     def __init__(self,
@@ -1264,11 +1166,11 @@ class Particle():
                 self.result = 2
                 self.vprint("Failed on precalc media")
                 return None 
+
         ## Check all genotypes for presence in model and create a list of valid experiments
         valid_experiments = []
         num_pos_remaining = 0
-        num_neg_remaining = 0
-        
+        num_neg_remaining = 0        
         gene_ids_in_model = self.model.get_relevant_gene_ids()
         num_expts_essential = 0
         for expt in self.experiments:
@@ -1288,19 +1190,7 @@ class Particle():
          
         self.num_tests_total = len(valid_experiments)
         self.vprint("\n{} valid experiments ...".format(len(valid_experiments)))
-        
-        
-#         N.B. Leave for now since model orphans not so easy with split RELs
-#         num_orphans = 0
-#         for metabolite in self.model.metabolites:
-#             if len(metabolite.reactions) == 1:
-#                 num_orphans += 1
-#         num_mets_ijo = len(self.model.metabolites)
-#         orphan_proportion = 1.0*num_orphans/num_mets_ijo
-#         
         self.vprint("Beginning tests ...")
-        
-#         counter = loop_counter(len(valid_experiments), "Testing experiments")
         num_tn = 0
         num_fp = 0
         num_tests_remaining = len(valid_experiments)
@@ -1326,104 +1216,10 @@ class Particle():
                 self.result = min_distance
                 return None
             
-#             ## If it is impossible to get below epsilon with all following 
-#             ## tests correct, stop early
-#             if fp_add > 0:
-#                 max_correct_predictions = num_tn + num_tests_remaining
-#                 max_proportion = 1.0 * max_correct_predictions/self.num_essential_expts
-#                 d_min = 1 - max_proportion
-#                 if d_min > self.epsilon:
-#                     print("Too far away")
-#                     break
-#             counter.step()        
-#         counter.stop()
         distance = 1.0 - num_tn / self.num_essential_expts
         self.result = distance
         return None
-    
-
-
-
-       
-def get_reaction(model, reaction_id):
-    """Get reaction object from model using reaction ID."""
-    
-    try:
-        return model.reactions.get_by_id(reaction_id)
-    except:
-        return None  
-    
-def create_medium(medium_file):
-    """
-    Import file containing a model medium and return a relevant dictionary.
-    """
-    
-    f_in = open(medium_file, 'r')
-    
-    medium_dict = {}
-    
-    for line in f_in:
-        if line[0] != "#":
-            try:
-                exch_id, stoichiometry = line.split("\t")
-            except:
-                print line
-                continue
-            
-            medium_dict[exch_id] = float(stoichiometry)
-    
-    return medium_dict
-
-def import_experiments(model, objective_name = "Biomass_BT_v2"):
-
-    objective = model.reactions.get_by_id(objective_name)
-
-    ## Import media
-    
-    media_shelf_file = '/Users/wbryant/work/BTH/analysis/fba/media.data'
-    media_shelf = shelve.open(media_shelf_file)
-    media = {}
-    media['min'] = media_shelf['min']
-    media['tyg'] = media_shelf['tyg']
-    media_shelf.close()
-
-    ## Create list of experiments for doing model assessment
-    
-    essentiality_data_file = '/Users/wbryant/work/BTH/analysis/gene_essentiality/essentiality_data_complete.csv'
-    experiments = []
-    expts_in = open(essentiality_data_file,'r')
-    
-    for line in expts_in:
-        if line[0] != "#":
-            details = line.strip().split("\t")
-            medium_base = details[1]
-            c_source = details[2]
-            genotype = details[3].split(" and ")
-            result = details[4]
-            
-            c_sources = []
-            
-            ## Add carbon source to medium
-            if c_source == "-":
-                c_sources = []
-            elif 'and' in c_source:
-                c_sources = c_source.split(' and ')
-            else:
-                c_sources = [c_source]
-            #expt_medium = media[medium_base]
-            expt_medium = deepcopy(media[medium_base])
-            for source in c_sources:
-                c_source_exchange = "EX_" + source + "(e)"
-                expt_medium[c_source_exchange] = -100
-            
-            
-            experiment = Experiment(details[0], expt_medium, result, genotype, objective)
-            
-            experiments.append(experiment)
-    
-    return experiments
-
-
+        
 class Experiment():
     """
     The details of a real experiment formatted for testing a constraint-based model.
@@ -1528,17 +1324,6 @@ def create_extended_model(model_file, objective_id = 'Biomass_BT_v2', require_so
 
 class ExtendedCobraModel(ArrayBasedModel):
     """Additional functionality for helping to use COBRA model."""
-    
-    def set_biomass_id(self, biomass_id):
-        """Make a note of the biomass equation for setting the objective."""
-        
-        self.biomass_id = biomass_id
-    
-    def set_objective_to_biomass(self):
-        try:
-            self.change_objective(self.biomass_id)
-        except:
-            print("Objective could not be set to biomass: bimoass_id not set?")
             
     def get_relevant_gene_ids(self):
         """Get a list of gene IDs for all genes implicated in non-zero flux reactions."""
@@ -1724,8 +1509,7 @@ class ExtendedCobraModel(ArrayBasedModel):
                     if debug:
                         print("Reaction ID '{}' not found, ignoring ...".format(component))
         self.medium_dict = medium_dict
-        
-        
+               
     def show_medium(self):
         """
         Find all exchange lower bounds < 0 and print to screen.
@@ -1737,256 +1521,6 @@ class ExtendedCobraModel(ArrayBasedModel):
                     reaction_identifier = reaction.name + " (" + reaction.id + ")"
                     print("%45s %5.0f %5.0f" % (reaction_identifier, reaction.lower_bound, reaction.upper_bound))
     
-    def add_source_exchange_reaction(self, compound):
-        """Create a source reaction for a metabolite to allow the take-up of 
-        that compound without a transport reaction."""
-        rxn_name = "{} exchange".format(compound.name) 
-        rxn_id = "EX_{}".format(compound.id)
-        new_rxn = Reaction(rxn_id)
-        new_rxn.name = rxn_name
-        new_rxn.lower_bound = -1
-        new_rxn.upper_bound = 1000
-        new_rxn.add_metabolites({compound: -1.0})
-        try:
-            self.add_reaction(new_rxn)
-            print("Reaction '{}' added to model".format(new_rxn.name))
-        except:
-            print("Reaction '{}' already exists in model".format(new_rxn.name))
-    
-    def find_blocked_reaction_components(self, show_not_blocked=False, tol=1e-10):
-        """Find those components of the objective reaction that cannot be created in the given conditions."""
-        try:
-            self.blocked_metabolites
-        except:
-            self.blocked_metabolites = []
-        objective_reactions = []
-        for reaction in self.reactions:
-            if reaction.objective_coefficient != 0:
-                objective_reactions.append(reaction)
-        if len(objective_reactions) == 0:
-            print("No objective set")
-            return None
-        elif len(objective_reactions) > 1:
-            print("Too many reactions in objective")
-            return None
-        else:
-            subject_reaction = objective_reactions[0]
-        for metabolite in subject_reaction.reactants:
-            test_rxn = Reaction('test')
-            test_rxn.add_metabolites({metabolite:-1})
-            self.add_reaction(test_rxn)
-            self.change_objective('test')
-#             if (self.opt() < tol) or show_not_blocked:
-#                 print("{:50s}: {}".format(metabolite.name + " (" + metabolite.id + ")", self.opt()))
-            if self.opt() < tol:
-                self.blocked_metabolites.append(metabolite)
-            test_rxn.remove_from_model()
-        self.change_objective(subject_reaction.id)
-    
-    def reset_blocked_metabolites(self):
-        self.blocked_metabolites = []
-        
-    def source_blocked_biomass_components(self, blocked_met_file, biomass_id = None, general_metabolite_ids = None, xml_output_file = '\Users\wbryant\work\MTU\MTU_SEED_unblocked.xml'):
-        """Add sources for all specific metabolites blocked in the biomass.
-        Adds exchange and uncatalysed transport reactions.
-        
-        N.B. THIS DEPENDS ON THE CURRENT MEDIUM
-        
-        general_metabolites is a list of 'general' metabolites 
-        included in the biomass, such as 'protein'.  The reactions producing these metabolites
-        will be individually tested and sourced if blocked.""" 
-        
-        general_metabolite_ids = general_metabolite_ids or None
-        if (not hasattr(general_metabolite_ids, '__iter__')) and (general_metabolite_ids is not None):
-            general_metabolite_ids = [general_metabolite_ids]
-        
-        if biomass_id:
-            self.set_biomass_id(biomass_id)
-        
-        self.set_objective_to_biomass()
-        self.find_blocked_reaction_components()
-        
-        blocked_reaction_ids = []
-        for metabolite_id in general_metabolite_ids:
-            try:
-                metabolite = self.metabolites.get_by_id(metabolite_id)
-                if metabolite not in self.blocked_metabolites:
-                    print("Metabolite '{}' is either not blocked, or is not in the biomass equation, skipping ...".format(metabolite.id))
-                    continue
-                else:
-                    self.blocked_metabolites.remove(metabolite)
-            except:
-                print("Metabolite ID '{}' could not be found, skipping ...".format(metabolite_id))
-                print("Some typical metabolite IDs are:\n")
-                met_ids = [metabolite.id for metabolite in self.metabolites]
-                met_ids = met_ids[0:4]
-                for met_id in met_ids:
-                    print met_id
-                continue
-            
-            ## Check that there is only one producing reaction
-            if len(metabolite.reactions) != 2:
-                print("Metabolite '{}' did not have a single generating reaction, ignoring ...".format(metabolite.id))
-            else:
-                ## Check it is in biomass
-                this_met_reaction_ids = [reaction.id for reaction in metabolite.reactions]
-                if self.biomass_id not in this_met_reaction_ids:
-                    print("Metabolite '{}' is not a biomass component, ignoring ...".format(metabolite.id)) 
-                else:
-                    this_met_reaction_ids.remove(self.biomass_id)
-                    blocked_reaction_ids.append(this_met_reaction_ids[0])
-                                   
-        for reaction_id in blocked_reaction_ids:
-            reaction = self.reactions.get_by_id(reaction_id)
-            self.change_objective(reaction)
-            self.find_blocked_reaction_components()
-        
-        print("Adding source and transporter for the following metabolites:")
-        for metabolite in self.blocked_metabolites:
-            print("- {} ({})".format(metabolite.name, metabolite.id))
-        
-        ## For now don't bother with boundary metabolites, just exchange of 
-        ## extracellular metabolites and transport
-        
-        ## N.B. if the EXC metabolite differs in ID by more than just the final 
-        ## character (i.e. 'e'/'c'), this will not find it. 
-        
-        f_out = open(blocked_met_file, 'w')
-        ex_reaction_ids = []
-        for metabolite_c in self.blocked_metabolites:
-            
-            ### Check for extracellular metabolite and create if not existent
-            metabolite_c_id = metabolite_c.id
-            metabolite_e_id = metabolite_c_id[:-1] + 'e'
-            met_e_exists = False
-            try:
-                metabolite_e = self.metabolites.get_by_id(metabolite_e_id)
-                met_e_exists = True
-            except:
-                metabolite_e = Metabolite(metabolite_e_id,
-                    formula=metabolite_c.formula,
-                    name=metabolite_c.name,
-                    compartment='e')
-            
-            ### Create transport reaction if one does not exist
-            tr_rxn_exists = False
-            if met_e_exists:
-                for reaction in self.reactions:
-                    if ((metabolite_c in reaction.reactants) and (metabolite_e in reaction.products))\
-                    or ((metabolite_e in reaction.reactants) and (metabolite_c in reaction.products)):
-                        print("Transport reaction for '{}' already exists ('{}') ...".format(
-                                        metabolite_c.name, reaction.id))
-                        tr_rxn_exists = True
-                        continue    
-            if not tr_rxn_exists:
-                tr_reaction_id = "TR_{}".format(metabolite_c_id[:-2])
-                tr_reaction_name = "{} Transport".format(metabolite_c.name)
-                transport_reaction = Reaction(tr_reaction_id)
-                transport_reaction.add_metabolites({
-                    metabolite_e: -1.0,
-                    metabolite_c: 1.0
-                    })
-                self.add_reaction(transport_reaction)
-                
-            ### Create exchange reaction if one does not exist
-            ex_reaction_id = "EX_{}".format(metabolite_c_id[:-2])
-            try:
-                ex_reaction = self.reactions.get_by_id(ex_reaction_id)
-                print("Exchange reaction '{}' already exists ...".format(ex_reaction_id))
-            except:
-                ex_reaction_name = "{} Exchange".format(metabolite_c.name)
-                exchange_reaction = Reaction(ex_reaction_id)
-                exchange_reaction.add_metabolites({
-                    metabolite_e: -1.0
-                    })
-                self.add_reaction(exchange_reaction)
-            
-            ### Log to 'blocked_met_file' exchange reactions for the 
-            ### metabolites that have been sourced this way
-            ex_reaction_ids.append(ex_reaction_id)
-            f_out.write("{}\n".format(ex_reaction_id))
-        f_out.close()
-        
-        ### Test addition of exchange reactions for blocked metabolites
-        self.set_objective_to_biomass()
-        blocked_test = self.opt()
-        if blocked_test != 0:
-            print("Model runs without the addition of sources for blocked metabolites - there are no blocked metabolites")
-        else:
-            unblocked_medium = self.medium_dict
-            for reaction_id in ex_reaction_ids:
-                unblocked_medium[reaction_id] = -1
-            self.change_objective(unblocked_medium)
-            unblocked_opt = self.opt()
-            print("With unblocked metabolites, biomass growth rate is {}".format(unblocked_opt))
-            
-        ## Output model to XML file
-        write_sbml_model(self, xml_output_file)
-    
-def compare_rel_lists(query_file, ref_file, ignore_genes=['0000000.0.peg.0']):
-    """Take two lists of RELs in separate files and give stats for similarities, excluding ignored genes."""
-    
-    results = ResultSet(0,0,0,0)
-    
-    num_ref = count_lines(ref_file)
-    ref_in = open(ref_file, 'r')
-    reference_rel_list = []
-    for line in ref_in:
-        entry_words = frozenset(re.findall("\w+", line))
-#         entries = line.strip().split("\t")
-#         ref_tuple = frozenset(entries[1].strip().split(",").append(entries[0]))
-#         ref_rxn = entries[0]
-#         ref_geneset = ((entries[1].strip().split(",")))
-        reference_rel_list.append(entry_words)
-    ref_in.close()
-    r = set(reference_rel_list)
-     
-    
-    query_in = open(query_file, 'r')
-    query_rel_list = []
-    for line in query_in:
-        entry_words = frozenset(re.findall("\w+", line))
-#         entries = line.strip().split("\t")
-#         query_tuple = frozenset(entries[1].strip().split(",").append(entries[0]))
-#         query_rxn = entries[0]
-#         query_geneset = ((entries[1].strip().split(",")))
-        query_rel_list.append(entry_words)
-    query_in.close()
-    q = set(query_rel_list)
-    
-    results.tp = len(r & q)
-    results.fp = len(q - r)
-    results.fn = len(r - q)
-    results.tn = len(r | q)
-    
-    
-#     query_dict = {}
-#     query_in = open(query_file, 'r')
-#     for line in query_in:
-#         query = line.strip().split("\t")
-#         query_rxn = query[0]
-#         query_geneset = set(query[1].strip().split(","))
-#         query_dict[query_rxn] = query_geneset
-#         if query_rxn in ref_dict:
-#             if query_geneset in ref_dict[query_rxn]:
-#                 
-#                 results.tp += 1
-#             else:
-#                 results.fp += 1
-#         else:
-#             results.fp += 1
-#         
-# #         print results.tp, results.fp, results.tn, results.fn
-#     
-#     results.fn = num_ref - results.tp
-#     results.tn = num_ref
-    
-    results.stats()
-    
-    return results, r, q
-    
-    
-
 def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose=False):
     """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
           
