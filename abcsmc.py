@@ -158,7 +158,8 @@ class AbcProblem():
             solver=None,
             prior_multiplier=None,
             test_type=None,
-            test_model_pre_abc=None):
+            test_model_pre_abc=None,
+            include_fn_reactions=None):
 
         """Set up ABC for given model
         
@@ -181,6 +182,8 @@ class AbcProblem():
         experiments_file = experiments_file or None
         self.test_type = test_type or None
         test_model_pre_abc = test_model_pre_abc or False
+        if include_fn_reactions is None:
+            include_fn_reactions = True
         
         print("Loading model ...")
         if model_file:
@@ -343,64 +346,51 @@ class AbcProblem():
             rxn.lb_orig = deepcopy(rxn.lower_bound)
             rxn.ub_orig = deepcopy(rxn.upper_bound)
         
-        
-        ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
-        ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
-        prior_fn_value = 0.5  
-        counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
-        expt_num = 0
-        for expt in self.experiments:
-            expt_num += 1
-            expt_no_genotype = deepcopy(expt)
-            expt_no_genotype.genotype = []
-            if len(expt.genotype) == 1:
-                a, b, c, d, fn = expt.test(self.model)
-                #print expt_num, a, b, c, d, fn
-                if fn:
-#                     print("FN prediction (Expt {}): '{}'".format(expt_num,",".join(expt.genotype)))
-                    ## Which reaction is implicated?
-                    ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
-                    self.model.unset_genotype()
-                    if len(ko_rxns) == 0:
-#                         print (" - No KO rxns?!")
-                        pass
-                    elif len(ko_rxns) == 1:
-#                         print("One KO rxn: '{}'".format(ko_rxns[0].id))
-                        ko_rxns_essential = [ko_rxns[0].id]
-                    else:
-                        ## Find model-breaking reaction(s)
-                        ko_rxns_essential = []
-                        for rxn in ko_rxns:
-                            rxn.lower_bound = 0
-                            rxn.upper_bound = 0
-                            _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
-                            if fn_rxn:
-                                ko_rxns_essential.append(rxn.id)
-                            rxn.lower_bound = rxn.lb_orig
-                            rxn.upper_bound = rxn.ub_orig
-                    for rxn_id in ko_rxns_essential:
-                        try:
-                            ## Already in prior dict? Amend if new prior lower
-                            prior_val = prior_dict[rxn_id]
-#                             print(" => '{}' original prior = {}".format(rxn_id, prior_val))
-                            if prior_val > prior_fn_value:
-                                prior_dict[rxn_id] = prior_fn_value
-#                                 print(" => new prior = {}".format(prior_fn_value))
-                        except:
-                            ## Add to prior dict
-                            prior_dict[rxn_id] = prior_fn_value   
-#                             print(" => '{}' added to prior, value = {}".format(rxn_id,prior_fn_value)) 
-            counter.step()
-        counter.stop()
-         
-        print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
-        
-        ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
-        if prior_multiplier or (prior_multiplier == 0):
-            print("Using prior multiplier ...")
-            for rxn_id, prior_val in prior_dict.iteritems():
-                prior_val_new = prior_val + (1.0-prior_val)*prior_multiplier
-                prior_dict[rxn_id] = prior_val_new
+        if include_fn_reactions:
+            ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
+            ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
+            prior_fn_value = 0.5  
+            counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
+            expt_num = 0
+            for expt in self.experiments:
+                expt_num += 1
+                expt_no_genotype = deepcopy(expt)
+                expt_no_genotype.genotype = []
+                if len(expt.genotype) == 1:
+                    a, b, c, d, fn = expt.test(self.model)
+                    if fn:
+                        ## Which reaction is implicated?
+                        ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
+                        self.model.unset_genotype()
+                        if len(ko_rxns) == 0:
+                            pass
+                        elif len(ko_rxns) == 1:
+                            ko_rxns_essential = [ko_rxns[0].id]
+                        else:
+                            ## Find model-breaking reaction(s)
+                            ko_rxns_essential = []
+                            for rxn in ko_rxns:
+                                rxn.lower_bound = 0
+                                rxn.upper_bound = 0
+                                _, _, _, _, fn_rxn = expt_no_genotype.test(self.model)
+                                if fn_rxn:
+                                    ko_rxns_essential.append(rxn.id)
+                                rxn.lower_bound = rxn.lb_orig
+                                rxn.upper_bound = rxn.ub_orig
+                        for rxn_id in ko_rxns_essential:
+                            try:
+                                ## Already in prior dict? Amend if new prior lower
+                                prior_val = prior_dict[rxn_id]
+                                if prior_val > prior_fn_value:
+                                    prior_dict[rxn_id] = prior_fn_value
+                            except:
+                                ## Add to prior dict
+                                prior_dict[rxn_id] = prior_fn_value   
+                counter.step()
+            counter.stop()
+             
+            print(" => {} RELs added".format(len(prior_dict)-abc_running_total))
+            
             
         ## All beliefs about reactions included in the model are now in prior_dict.
         ## Any reaction not in prior_dict is not in the ABC and should always be included.
@@ -413,7 +403,15 @@ class AbcProblem():
             self.prior_set[idx] = prior_value
             self.model.theta_rxn_map[idx] = self.model.reactions.get_by_id(rxn_id)
             rxn_theta_map[rxn_id] = idx
+        self.prior_set_original = deepcopy(self.prior_set)       
+        ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
+        if prior_multiplier or (prior_multiplier == 0):
+            print("Using prior multiplier ...")
+            for idx, prior_val in enumerate(self.prior_set):
+                prior_val_new = prior_val + (1.0-prior_val)*prior_multiplier
+                self.prior_set[idx] = prior_val_new
         self.prior_estimate = deepcopy(self.prior_set)
+        
         
         ## Calculate ln_pi_max for calculation of pi_rel in weight calculations
         ln_pi_max = 0
@@ -598,7 +596,8 @@ class AbcProblem():
             self.prior_estimate,
             self.essential_theta_sets,
             self.test_type,
-            self.num_essential_expts)
+            self.num_essential_expts,
+            self.prior_set_original)
         
         return particle
     
@@ -723,7 +722,8 @@ class Particle():
             prior_estimate,
             essential_theta_sets,
             test_type,
-            num_essential_expts):
+            num_essential_expts,
+            prior_set_original):
          
         self.theta_set_prev = theta_set_prev
         self.w_set_prev = w_set_prev
@@ -744,6 +744,7 @@ class Particle():
         self.essential_theta_sets = essential_theta_sets
         self.test_type = test_type
         self.num_essential_expts = num_essential_expts
+        self.prior_set_original = prior_set_original
         
         self.num_params = len(prior_set)
          
@@ -759,9 +760,26 @@ class Particle():
         
         return None
     
-    def vprint(self, string):
-        if self.verbose:
+    def vprint(self, string, verbose=None):
+        """Print if verbose is true - override class verbosity with specified verbosity
+        """
+        if verbose is None:
+            verbose = self.verbose
+        if verbose:
             print(string)
+        return None
+    
+    def reset_prior(self, prior_multiplier=None):
+        """Set prior to original values, and apply prior_multiplier if specified 
+        """
+        self.prior_set = deepcopy(self.prior_set_original)
+        if prior_multiplier or (prior_multiplier == 0):
+            for idx, prior_val in enumerate(self.prior_set):
+                prior_val_new = prior_val + (1.0-prior_val)*prior_multiplier
+                self.prior_set[idx] = prior_val_new
+        self.prior_estimate = deepcopy(self.prior_set)
+        self.theta_accepted = None
+        return None
          
     def propose_theta(self):
         """Sample theta from previous iteration and perturb according to K_t."""
@@ -868,7 +886,7 @@ class Particle():
             except:
                 self.ln_w = None
               
-    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=None):
+    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=None, verbose=None):
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
@@ -884,12 +902,14 @@ class Particle():
                     print("Attempts\tPrecalc\tThetasets")
                     print("{}\t{}\t{}".format(count_attempts,failed_precalc,failed_theta_sets))
                     return -1,-1,-1,-1
-            #sys.stdout.write(".")
-            #sys.stdout.flush()
+            
+            if verbose:
+                sys.stdout.write("\r{}\t{}\t{}                                "
+                    .format(count_attempts, failed_precalc, failed_theta_sets))
+                sys.stdout.flush()
+            
             if debug:
                 sys.stdout.write("\nParticle {} (epsilon = {}),                   ".format(count_attempts, self.epsilon))    
-                sys.stdout.flush()
-            if debug:
                 sys.stdout.write("\nProposing theta ...                           \n")    
                 sys.stdout.flush()
             self.propose_theta()
@@ -906,7 +926,7 @@ class Particle():
             if running_model:
                 self.apply_proposed_theta()
                 if not(not(self.test_type)) & (self.test_type == 'essential_and_orphan_mets'):
-                    self.conduct_experiments_essential_and_orphan_mets(debug=debug)
+                    self.conduct_experiments_essential_and_orphan_mets(debug=debug, verbose=False)
                 else:
                     self.conduct_experiments(debug=debug)
                 if debug:
@@ -922,17 +942,17 @@ class Particle():
             ## If model is close enough to experiments, accept and return theta and calculated weight
             if self.result == 2:
                 failed_precalc += 1
-                self.vprint("result = 2")
+                #self.vprint("result = 2")
             elif self.result == 3:
                 failed_theta_sets += 1
-                self.vprint("result = 3")
+                #self.vprint("result = 3")
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
-                self.vprint("Accepted particle (epsilon = {}):".format(self.result))
-                self.vprint(" => {} total attempts".format(count_attempts))
-                self.vprint(" => {} failed on precalc".format(failed_precalc))
-                self.vprint(" => {} failed on theta sets".format(failed_theta_sets))
+                self.vprint("\nAccepted particle (epsilon = {}):".format(self.result),verbose)
+                self.vprint(" => {} total attempts".format(count_attempts),verbose)
+                self.vprint(" => {} failed on precalc".format(failed_precalc),verbose)
+                self.vprint(" => {} failed on theta sets".format(failed_theta_sets),verbose)
                 sys.stdout.write(".")
                 sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
@@ -996,8 +1016,7 @@ class Particle():
                 ln_p += ln(p_transition)
                 probability *= p_transition
             return probability, ln_p
-        
-    
+   
     def K_t(self, theta_previous = None):
         """Perturbation function!
          
@@ -1046,12 +1065,9 @@ class Particle():
         else:
             ## Sample from the prior
             theta_proposed = np.zeros(self.prior_set.size)
-#             print theta_proposed, "\n"
             prior_iter = np.nditer(self.prior_set)
             for idx, param_prior in enumerate(prior_iter):
-#                 print param_prior
                 param_value = np.random.binomial(1,param_prior)
-#                 print(" - {} ({})".format(param_value, type(param_value)))
                 theta_proposed[idx] = param_value
             return theta_proposed
  
@@ -1155,20 +1171,20 @@ class Particle():
         self.result = distance
         return None
     
-    def conduct_experiments_essential_and_orphan_mets(self, debug=False, epsilon=None):
+    def conduct_experiments_essential_and_orphan_mets(self, debug=False, epsilon=None, verbose=None):
         """Conduct experiments for model in current state and return 1 - (balanced accuracy)."""
          
         opt_cutoff = 1e-5
         self.num_tests_checked = 0
         self.num_tests_total = 0
-        self.vprint("\rChecking precalculated media ...                                     ")    
+        self.vprint("\rChecking precalculated media ...                                     ",verbose)    
         ## Must run on all common media before experimental testing
         for precalc_medium in self.precalc_media:
             self.model.set_medium(precalc_medium)
-            self.vprint(" => precalc: {}".format(self.model.opt()))
+            self.vprint(" => precalc: {}".format(self.model.opt()),verbose)
             if self.model.opt() <= opt_cutoff:
                 self.result = 2
-                self.vprint("Failed on precalc media")
+                self.vprint("Failed on precalc media",verbose)
                 return None 
 
         ## Check all genotypes for presence in model and create a list of valid experiments
@@ -1193,8 +1209,8 @@ class Particle():
                         num_neg_remaining += 1
          
         self.num_tests_total = len(valid_experiments)
-        self.vprint("\n{} valid experiments ...".format(len(valid_experiments)))
-        self.vprint("Beginning tests ...")
+        self.vprint("\n{} valid experiments ...".format(len(valid_experiments)),verbose)
+        self.vprint("Beginning tests ...",verbose)
         num_tn = 0
         num_fp = 0
         num_tests_remaining = len(valid_experiments)
@@ -1209,14 +1225,14 @@ class Particle():
             max_distance = 1.0 - (1.0 * num_tn) / self.num_essential_expts
             min_distance = 1.0 - (1.0 * num_tn + num_tests_remaining)/self.num_essential_expts
             
-            self.vprint("{}\t{}\t{}".format(num_tests_remaining,min_distance, max_distance))
+            self.vprint("{}\t{}\t{}".format(num_tests_remaining,min_distance, max_distance),verbose)
             
             if min_distance > self.epsilon:
-                self.vprint("Minimum distance > epsilon, aborting ...")
+                self.vprint("Minimum distance > epsilon, aborting ...",verbose)
                 self.result = min_distance
                 return None
             if max_distance < self.epsilon:
-                self.vprint("Maximum distance < epsilon, finishing ...")
+                self.vprint("Maximum distance < epsilon, finishing ...",verbose)
                 self.result = min_distance
                 return None
             
