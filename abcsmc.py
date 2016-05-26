@@ -11,12 +11,38 @@ find a combination of additions and removals of reactions and enzyme/reaction
 relationships to and from an original model that produces a model with 
 maximum parsimony with a particular set of experimental observations.   
 
-DETAILS
+SUMMARY
 =======
 A specific reaction can be catalysed by one or more (or no) enzymes, which are
 either known or unknown.  The assertion that a particular reaction is catalysed
 by a particular enzyme, a Reaction/Enzyme Link (or REL), is tested in this
-algorithm.    
+algorithm.  The algorithm requires as input a full model including all known and
+proposed RELs, a set of experiments to determine the congruence of model and 
+experiment, and a confidence estimation for the existence of each REL.
+
+The algorithm requires a set of parameters to estimate.  In this case the
+existence of a particular REL is cast as a boolean parameter and prior confidence
+for the existence of that REL is taken from the confidence estimation provided.
+The existence of all RELs with a confidence less than 1 are included as 
+parameters in the ABC-SMC and will be either included in or excluded from each
+proposed model created by the algorithm.
+
+The algorithm will propose a large number of alternative models, calculating
+for them the congruence with the experimental data provided.  Models will be 
+accepted if their distance measure form the experimental data falls below a
+specified value (epsilon).  Once N models have been found that are accepted,
+epsilon is reduced and new models are proposed by selecting a random accepted 
+model from the previous step and perturbing it.  At each step both epsilon and
+the perturbation strength are reduced until a set of N models is settled upon,
+having a low epsilon.
+
+The output is therefore a set of N models, each with a high congruence with the
+observed experimental data.  The confidence for the existence of each REL in 
+reality can then be calculated as the proportion of these models containing 
+that REL.      
+
+For further information on the algorithm and formulation of inputs, see the 
+accompanying paper.
 
 LICENSE
 =======
@@ -33,7 +59,37 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+INSTALLATION
+============
+This module does not need to be installed; if the directory containing this
+file is in the PYTHONPATH, it can be imported using:
 
+C{import abcsmc}
+
+PREREQUISITES
+=============
+This module has been tested with Python 2.7
+
+Required non-standard Python packages (tested versions specified in brackets):
+
+COBRApy (0.4.0b4)
+NumPy (1.10.4)
+LibSBML (5.12.1) - for SBML import and export
+Pyparsing (2.0.3) - For GPR <--> list of enzymes translation
+
+This package also requires the installation of a compatible linear optimisation
+program.  Testing has shown Gurobi to be up to 30 times faster than the free
+GLPK program, and is available for free with an academic license when used for
+the purposes of research.
+
+EXAMPLE USAGE
+=============
+Create problem object:
+
+C{abc_problem = AbcProblem(
+ 
+
+ 
 
 @author: wbryant
 '''
