@@ -861,7 +861,7 @@ class Particle():
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
-                self.vprint("\nAccepted particle (epsilon = {}):".format(self.result),verbose)
+                print("\nAccepted particle (result = {})\n".format(self.result),verbose)
                 self.vprint(" => {} total attempts".format(count_attempts),verbose)
                 self.vprint(" => {} failed on precalc".format(failed_precalc),verbose)
                 self.vprint(" => {} failed on theta sets".format(failed_theta_sets),verbose)
@@ -869,7 +869,7 @@ class Particle():
                 sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
             else:
-                print("epsilon = {}".format(self.result))
+                print("result = {}".format(self.result))
     
     def perturb_param_using_prior(self, idx):
         """Return p_transition based on current prior estimate for REL idx."""
