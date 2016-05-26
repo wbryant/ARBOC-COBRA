@@ -61,8 +61,8 @@ class AbcProblem():
             prior_file=None,
             experiments=None,
             experiments_file=None,
-            particles_per_population,
-            num_populations_max,
+            particles_per_population=None,
+            num_populations_max=None,
             rel_priors = None,
             default_prior_value = 0.99,
             enzyme_limit = 10,
@@ -94,8 +94,8 @@ class AbcProblem():
         
         """
         self.t = 0
-        self.N = particles_per_population
-        self.T = num_populations_max
+        self.N = particles_per_population or 10
+        self.T = num_populations_max or 5
         solver = solver or 'glpk'
         biomass_id = biomass_id or 'Biomass0'
         experiments_file = experiments_file or None
