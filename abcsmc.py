@@ -1,5 +1,39 @@
 '''
-Created on 10 Mar 2014
+ABC-SMC for COBRA models v0.2
+Copyright 2016 William A. Bryant
+
+ABSTRACT
+========
+This module undertakes Approximate Bayesian Computation using a Sequential
+Monte Carlo approach (ABC-SMC) to assess proposed additions and uncertain 
+enzyme/reaction relationships in a COBRA constraint-based metabolic model, and
+find a combination of additions and removals of reactions and enzyme/reaction 
+relationships to and from an original model that produces a model with 
+maximum parsimony with a particular set of experimental observations.   
+
+DETAILS
+=======
+A specific reaction can be catalysed by one or more (or no) enzymes, which are
+either known or unknown.  The assertion that a particular reaction is catalysed
+by a particular enzyme, a Reaction/Enzyme Link (or REL), is tested in this
+algorithm.    
+
+LICENSE
+=======
+This program is free software, distributed under the terms of the GNU GPL:
+you can redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
 
 @author: wbryant
 '''
@@ -17,129 +51,18 @@ from math import sqrt, log10, ceil, exp
 import shelve
 from collections import Counter
 import sys, re
-
-def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
-    """Run func, but exit after timeout_duration if func hasn't completed.
-    """
-    import signal
-    class TimeoutError(Exception):
-        pass
-    def handler(signum, frame):
-        raise TimeoutError()
-    # set the timeout handler
-    signal.signal(signal.SIGALRM, handler) 
-    signal.alarm(timeout_duration)
-    try:
-        result = func(*args, **kwargs)
-    except TimeoutError as exc:
-        print("\ntimed out ...\n")
-        result = default
-    finally:
-        signal.alarm(0)
-    return result
-
-def import_prior_dict(
-        prior_files,
-        rem_default = 0.9,
-        add_default = 0.1):
-    """Create prior dictionary from prior files, giving default prior values 
-    where not specified."""
-    prior_dict = {}
-    if not isinstance(prior_files, list):
-        prior_files = [prior_files]
-    for filename in prior_files:
-        f_in = open(filename, 'r')
-        for line in f_in:
-            entry = line.strip().split("\t")
-            if entry[1] == "rem":
-                prior_dict[entry[0]] = rem_default
-            elif entry[1] == "add":
-                prior_dict[entry[0]] = add_default
-            else:
-                try:
-                    prior_val = float(entry[1])
-                    prior_dict[entry[0]] = prior_val
-                except:
-                    print -1
-        f_in.close()
-    return prior_dict      
-
-def import_media(media_shelf_file=None):
-    """Import media values from a media shelf file for input into experiments."""
-    media_shelf_file = media_shelf_file or '/Users/wbryant/work/BTH/analysis/fba/media.data'
-    media_shelf = shelve.open(media_shelf_file)
-    media = {}
-    media['min'] = media_shelf['min']
-    media['tyg'] = media_shelf['tyg']
-    media_shelf.close()
-    return media
-
-
-    
-def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file=None, debug=False):
-    """From a table of genotype/growth information, create the experiments 
-    for a particular organism.
-    
-    If there are any lines at the top of the file starting with the word 
-    "MEDIUM" in the first column the next column will be the medium name and 
-    the following cells will contain medium components for specifying media 
-    used in the experiments. 
-    """
-    print("Importing data ...")
-    objective = model.reactions.get_by_id(objective_id)
-    data_file = data_file or '/Users/wbryant/work/BTH/analysis/gene_essentiality/essentiality_data_complete.csv'
-    experiments = []
-    expts_in = open(data_file,'r')
-    if not media:
-        media = {}
-    for line in expts_in:
-        if line[0] != "#":
-            details = line.strip().split("\t")
-            if details[0] == 'MEDIUM':
-                medium_name = details[1]
-                medium_components = details[2:]
-                medium_dict = {}
-                for component in medium_components:
-                    medium_dict[component.strip()] = -1
-                media[medium_name] = medium_dict
-                try:
-                    model.set_medium(medium_dict)
-                except:
-                    print("Medium '{}' cannot be set on the model - incorrect component ID?".format(medium_name))
-                    for component in medium_components:
-                        print (" - {}".format(component))        
-            else:
-                medium_base = details[1]
-                c_source = details[2]
-                genotype = details[3].split(" and ")
-                result = details[4]
-                c_sources = []
-                ## Add carbon source to medium
-                if c_source == "-":
-                    c_sources = []
-                elif 'and' in c_source:
-                    c_sources = c_source.split(' and ')
-                elif c_source:
-                    c_sources = [c_source]
-                else:
-                    c_sources = None
-                expt_medium = deepcopy(media[medium_base])
-                if c_sources:
-                    for source in c_sources:
-                        c_source_exchange = "EX_" + source + "_e"
-                        expt_medium[c_source_exchange] = -100
-                experiment = Experiment(details[0], expt_medium, result, genotype, objective)
-                experiments.append(experiment)
-    expts_in.close()
-    return experiments
  
 class AbcProblem():
     
     def __init__(self,
+            model=None,
+            model_file=None,
+            prior_dict = None,
+            prior_file=None,
+            experiments=None,
+            experiments_file=None,
             particles_per_population,
             num_populations_max,
-            model=None,
-            prior_dict = None,
             rel_priors = None,
             default_prior_value = 0.99,
             enzyme_limit = 10,
@@ -147,13 +70,9 @@ class AbcProblem():
             epsilon_0 = 0.5,
             epsilon_T = 0.285,
             p_0 = 0.2,
-            experiments=None,
             alpha = None,
             include_all=False,
-            prior_file=None,
-            model_file=None,
             biomass_id=None,
-            experiments_file=None,
             original_model_rxn_ids=None,
             solver=None,
             prior_multiplier=None,
@@ -161,7 +80,7 @@ class AbcProblem():
             test_model_pre_abc=None,
             include_fn_reactions=None):
 
-        """Set up ABC for given model
+        """Set up a COBRA model for ABC-SMC improvement
         
         num_populations = number of iterations to run through;
         model = ExtendedCobraModel to be tested;
@@ -895,29 +814,26 @@ class Particle():
         print("\nFinding particle:".format(self.t, self.id))
         
         while True:
-            count_attempts += 1
             if max_tests:
-                if count_attempts > max_tests:
+                if count_attempts >= max_tests:
                     print("Too many failed, exiting ...")
                     print("Attempts\tPrecalc\tThetasets")
                     print("{}\t{}\t{}".format(count_attempts,failed_precalc,failed_theta_sets))
                     return -1,-1,-1,-1
-            
-            if verbose:
-                sys.stdout.write("\r{}\t{}\t{}                                "
-                    .format(count_attempts, failed_precalc, failed_theta_sets))
-                sys.stdout.flush()
-            
-            if debug:
-                sys.stdout.write("\nParticle {} (epsilon = {}),                   ".format(count_attempts, self.epsilon))    
-                sys.stdout.write("\nProposing theta ...                           \n")    
-                sys.stdout.flush()
-            self.propose_theta()
-            
-            ## Does excluded_theta_set contain any of the essential_theta_sets?  if so 
-            ## set result to 2
-            excluded_theta_set = set([idx for idx, t_value in enumerate(self.theta_proposed) if t_value == 0])
-            
+            count_attempts += 1            
+            sys.stdout.write("\r{}\t{}\t{}\t{}                            "
+                .format(
+                    count_attempts,
+                    failed_precalc,
+                    failed_theta_sets,
+                    count_attempts-failed_precalc-failed_theta_sets))
+            sys.stdout.flush()
+
+            self.propose_theta()            
+            excluded_theta_set = set([
+                idx for idx, t_value
+                in enumerate(self.theta_proposed)
+                if t_value == 0])
             running_model=True
             for essential_theta_set in self.essential_theta_sets:
                 if essential_theta_set.issubset(excluded_theta_set):
@@ -936,16 +852,12 @@ class Particle():
                     sys.stdout.flush() 
             else:
                 self.result = 3
-                if debug:
-                    print("At least one essential_theta_set was excluded")
                 
             ## If model is close enough to experiments, accept and return theta and calculated weight
             if self.result == 2:
                 failed_precalc += 1
-                #self.vprint("result = 2")
             elif self.result == 3:
                 failed_theta_sets += 1
-                #self.vprint("result = 3")
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
@@ -1596,6 +1508,119 @@ def conduct_experiments(model, experiments, debug = False, epsilon=None, verbose
     num_tests_checked = num_succeeded_tests + num_failed_tests
     full_results = deepcopy(running_results) 
     return full_results, num_tests_checked        
+
+def timeout(func, args=(), kwargs={}, timeout_duration=60, default=None):
+    """Run func, but exit after timeout_duration if func hasn't completed.
+    """
+    import signal
+    class TimeoutError(Exception):
+        pass
+    def handler(signum, frame):
+        raise TimeoutError()
+    # set the timeout handler
+    signal.signal(signal.SIGALRM, handler) 
+    signal.alarm(timeout_duration)
+    try:
+        result = func(*args, **kwargs)
+    except TimeoutError as exc:
+        print("\ntimed out ...\n")
+        result = default
+    finally:
+        signal.alarm(0)
+    return result
+
+def import_prior_dict(
+        prior_files,
+        rem_default = 0.9,
+        add_default = 0.1):
+    """Create prior dictionary from prior files, giving default prior values 
+    where not specified."""
+    prior_dict = {}
+    if not isinstance(prior_files, list):
+        prior_files = [prior_files]
+    for filename in prior_files:
+        f_in = open(filename, 'r')
+        for line in f_in:
+            entry = line.strip().split("\t")
+            if entry[1] == "rem":
+                prior_dict[entry[0]] = rem_default
+            elif entry[1] == "add":
+                prior_dict[entry[0]] = add_default
+            else:
+                try:
+                    prior_val = float(entry[1])
+                    prior_dict[entry[0]] = prior_val
+                except:
+                    print -1
+        f_in.close()
+    return prior_dict      
+
+def import_media(media_shelf_file=None):
+    """Import media values from a media shelf file for input into experiments."""
+    media_shelf_file = media_shelf_file or '/Users/wbryant/work/BTH/analysis/fba/media.data'
+    media_shelf = shelve.open(media_shelf_file)
+    media = {}
+    media['min'] = media_shelf['min']
+    media['tyg'] = media_shelf['tyg']
+    media_shelf.close()
+    return media
+    
+def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file=None, debug=False):
+    """From a table of genotype/growth information, create the experiments 
+    for a particular organism.
+    
+    If there are any lines at the top of the file starting with the word 
+    "MEDIUM" in the first column the next column will be the medium name and 
+    the following cells will contain medium components for specifying media 
+    used in the experiments. 
+    """
+    print("Importing data ...")
+    objective = model.reactions.get_by_id(objective_id)
+    data_file = data_file or '/Users/wbryant/work/BTH/analysis/gene_essentiality/essentiality_data_complete.csv'
+    experiments = []
+    expts_in = open(data_file,'r')
+    if not media:
+        media = {}
+    for line in expts_in:
+        if line[0] != "#":
+            details = line.strip().split("\t")
+            if details[0] == 'MEDIUM':
+                medium_name = details[1]
+                medium_components = details[2:]
+                medium_dict = {}
+                for component in medium_components:
+                    medium_dict[component.strip()] = -1
+                media[medium_name] = medium_dict
+                try:
+                    model.set_medium(medium_dict)
+                except:
+                    print("Medium '{}' cannot be set on the model - incorrect component ID?".format(medium_name))
+                    for component in medium_components:
+                        print (" - {}".format(component))        
+            else:
+                medium_base = details[1]
+                c_source = details[2]
+                genotype = details[3].split(" and ")
+                result = details[4]
+                c_sources = []
+                ## Add carbon source to medium
+                if c_source == "-":
+                    c_sources = []
+                elif 'and' in c_source:
+                    c_sources = c_source.split(' and ')
+                elif c_source:
+                    c_sources = [c_source]
+                else:
+                    c_sources = None
+                expt_medium = deepcopy(media[medium_base])
+                if c_sources:
+                    for source in c_sources:
+                        c_source_exchange = "EX_" + source + "_e"
+                        expt_medium[c_source_exchange] = -100
+                experiment = Experiment(details[0], expt_medium, result, genotype, objective)
+                experiments.append(experiment)
+    expts_in.close()
+    return experiments
     
 if __name__ == '__main__':
     pass
