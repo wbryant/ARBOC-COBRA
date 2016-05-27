@@ -865,7 +865,7 @@ class Particle():
             except:
                 self.ln_w = None
               
-    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=None, verbose=None):
+    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=1000, verbose=None):
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
