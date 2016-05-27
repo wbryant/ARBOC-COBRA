@@ -826,7 +826,9 @@ class Particle():
             pass
 #            self.ln_weight_denominator = n_diff_res*(ln(p) + ln(1-p)) + ln(weighted_sum)
         except:
-            print("This particle is so distant from every other particle that it has underflown, it will take the maximum value of the weights of the other particles in the population")
+            print("This particle is so distant from every other particle that \
+                    it has underflown, it will take the maximum value of the \
+                    weights of the other particles in the population")
             self.ln_weight_denominator = None
     
     def calculate_ln_weight_denominator(self):
@@ -843,7 +845,9 @@ class Particle():
         try:
             self.ln_weight_denominator = n_diff_res*(ln(p) + ln(1-p)) + ln(weighted_sum)
         except:
-            print("This particle is so distant from every other particle that it has underflown, it will take the maximum value of the weights of the other particles in the population")
+            print("This particle is so distant from every other particle that \
+                    it has underflown, it will take the maximum value of the \
+                    weights of the other particles in the population")
             self.ln_weight_denominator = None
             
     def calculate_ln_w(self):
@@ -877,13 +881,6 @@ class Particle():
                     print("{}\t{}\t{}".format(count_attempts,failed_precalc,failed_theta_sets))
                     return -1,-1,-1,-1
             count_attempts += 1            
-            sys.stdout.write("\r{}\t{}\t{}\t{}                            "
-                .format(
-                    count_attempts,
-                    failed_precalc,
-                    failed_theta_sets,
-                    count_attempts-failed_precalc-failed_theta_sets))
-            sys.stdout.flush()
 
             self.propose_theta()            
             excluded_theta_set = set([
@@ -917,16 +914,25 @@ class Particle():
             elif self.result < self.epsilon:
                 self.theta_accepted = self.theta_proposed
                 self.calculate_ln_w()
-                print("\nAccepted particle (result = {})\n".format(self.result),verbose)
+                print("\nAccepted particle (result = {})\n".format(self.result))
                 self.vprint(" => {} total attempts".format(count_attempts),verbose)
                 self.vprint(" => {} failed on precalc".format(failed_precalc),verbose)
                 self.vprint(" => {} failed on theta sets".format(failed_theta_sets),verbose)
-                sys.stdout.write(".")
+                #sys.stdout.write(".")
                 sys.stdout.flush()
                 return self.theta_accepted, self.ln_w, self.result, self.theta_sampled_idx
             else:
                 print("result = {}".format(self.result))
-    
+            sys.stdout.write("\r{}\t{}\t{}\t{}                            "
+                .format(
+                    count_attempts,
+                    failed_precalc,
+                    failed_theta_sets,
+                    count_attempts-failed_precalc-failed_theta_sets))
+            sys.stdout.flush()
+
+        return None
+        
     def perturb_param_using_prior(self, idx):
         """Return p_transition based on current prior estimate for REL idx."""
         
