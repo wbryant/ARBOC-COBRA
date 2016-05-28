@@ -324,7 +324,7 @@ class AbcProblem():
         if include_fn_reactions:
             ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
             ## For each gene in experiments, determine set of reactions that are stopped by gene deletion.
-            prior_fn_value = 0.5  
+            prior_fn_value = 0.95  
             counter = loop_counter(len(self.experiments),"Finding inessential genes incorrectly predicted as essential")
             expt_num = 0
             for expt in self.experiments:
@@ -865,7 +865,7 @@ class Particle():
             except:
                 self.ln_w = None
               
-    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=1000, verbose=None):
+    def find_accepted_theta(self, debug = False, use_ln = True, use_simple_K=False, max_tests=100000, verbose=None):
         """Find accepted theta and return it with weight."""
          
         count_attempts = 0
@@ -876,7 +876,7 @@ class Particle():
         while True:
             if max_tests:
                 if count_attempts >= max_tests:
-                    print("Too many failed, exiting ...")
+                    print("\nToo many failed, exiting ...")
                     print("Attempts\tPrecalc\tThetasets")
                     print("{}\t{}\t{}".format(count_attempts,failed_precalc,failed_theta_sets))
                     return -1,-1,-1,-1
