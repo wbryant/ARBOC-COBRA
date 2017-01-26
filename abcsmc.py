@@ -79,8 +79,8 @@ Pyparsing (2.0.3) - For GPR <--> list of enzymes translation
 
 This package also requires the installation of a compatible linear optimisation
 program.  Testing has shown Gurobi to be up to 30 times faster than the free
-GLPK program, and is available for free with an academic license when used for
-the purposes of research.
+GLPK program, and is available for free with an academic license when used 
+solely for the purposes of research.
 
 EXAMPLE USAGE
 =============
