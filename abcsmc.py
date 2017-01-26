@@ -98,7 +98,6 @@ from cobra.core import ArrayBasedModel
 from cobra.io.sbml import create_cobra_model_from_sbml_file 
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
 from local_gene_parser import gene_parser
-from local_utils import loop_counter, ResultSet
 import numpy as np
 from numpy import log as ln
 from copy import deepcopy
@@ -1683,6 +1682,153 @@ def import_expt_data(model, objective_id="Biomass_BT_v2", media=None, data_file=
                 experiments.append(experiment)
     expts_in.close()
     return experiments
+
+from time import time, sleep
+from math import floor
+
+class loop_counter:
+    """Use to track progress of a loop of known length."""
     
+    def __init__(self, length, message = 'Entering loop', timed=False, add_delay=False):
+        self.stopped = False
+        self.length = length
+        self.num_done = 0
+        self.next_progress = 1
+        self.percent_done = 0
+        self.timed = timed
+        self.add_delay = add_delay
+        if self.timed:
+            self.time_0 = time()
+        print("{}:".format(message))
+        try:
+            if self.add_delay:
+                sleep(0.001)
+            sys.stdout.write("\r - 0 %%")
+            sys.stdout.flush()
+        except:
+            pass
+    
+    def step(self):
+        self.num_done += 1
+        if not self.stopped:
+            if self.num_done >= self.length:
+                self.stop()
+            else:
+                percent_done = floor(1000.0*self.num_done/self.length)/10
+                try:
+                    if self.add_delay:
+                        sleep(0.001)
+                    sys.stdout.write("\r - {} % ({} / {})".format(
+                        percent_done,
+                        self.num_done,
+                        self.length
+                    ))
+                    sys.stdout.flush()
+                except:
+                    pass
+                
+    def stop(self):
+        if not self.stopped:
+            try:
+                if self.add_delay:
+                    sleep(0.001)
+                sys.stdout.write("\r - 100 % ({})                        \n"
+                    .format(self.length))
+            except:
+                pass
+            self.stopped = True
+            sys.stdout.flush()
+
+class ResultSet:
+    """A container for a set of results that can return stats"""
+    
+    def __init__(self, tp=0, tn=0, fp=0, fn=0):
+        
+        self.tp = tp
+        self.tn = tn
+        self.fp = fp
+        self.fn = fn
+    
+    def precision(self):
+        try:
+            return self.tp / float(self.tp+self.fp)
+        except:
+            return 0
+    
+    def recall(self):
+        try:
+            return self.tp / float(self.tp+self.fn)
+        except:
+            return 0
+            
+    def f_measure(self):
+        precision = self.precision()
+        recall = self.recall()
+        try:
+            return 2*precision*recall/(precision + recall)
+        except:
+            return 0
+    
+    def accuracy(self):
+        try:
+            return float(self.tp + self.tn) / (self.tp + self.tn + self.fp + self.fn)
+        except:
+            return 0
+    
+    def balanced_accuracy(self):
+        try:
+            return 0.5 * (float(self.tp)/(self.tp + self.fn) + float(self.tn)/(self.tn+self.fp))
+        except:
+            return 0
+    
+    def max_balanced_accuracy(self, num_tests_remaining):
+        """Given a number of tests to be added to the results, what is the 
+        maximum balanced accuracy that could be achieved?  
+        """
+        
+        pass
+    
+    def calc_balanced_tfpn_addition(self, num_tests_remaining):
+        denominator = self.fn + self.fp
+        numerator = self.fn*self.tn - self.tp*self.fp + self.fn*num_tests_remaining
+        
+        x = round(numerator/float(denominator))
+        y = num_tests_remaining - x
+        
+        return x, y
+         
+        
+        
+    def stats(self):
+        if self.tp > 0:
+            precision = self.precision()
+            recall = self.recall()
+            f_measure = self.f_measure()
+            accuracy = self.accuracy()
+            balanced_accuracy = self.balanced_accuracy()
+            
+            print("tp\ttn\tfp\tfn")
+            print("{}\t{}\t{}\t{}\n".format(
+                self.tp,
+                self.tn,
+                self.fp,
+                self.fn
+            ))
+            
+            print("%12s = %1.3f" % ('Precision', precision))
+            print("%12s = %1.3f" % ('Recall', recall))
+            print("%12s = %1.3f" % ('F-measure', f_measure))
+            print("%12s = %1.3f" % ('Accuracy', accuracy))
+            print("%12s = %1.3f" % ('Bal. Accuracy', balanced_accuracy))
+        else:
+            print("There are no true positives.")
+            print("tp\ttn\tfp\tfn")
+            print("{}\t{}\t{}\t{}\n".format(
+                self.tp,
+                self.tn,
+                self.fp,
+                self.fn
+            ))
+
 if __name__ == '__main__':
     pass
