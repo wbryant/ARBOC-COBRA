@@ -1,9 +1,10 @@
 '''
 ABC-SMC for COBRA models v0.2
-Copyright 2016 William A. Bryant
+Copyright 2017 William A. Bryant
 
 ABSTRACT
 ========
+
 This module undertakes Approximate Bayesian Computation using a Sequential
 Monte Carlo approach (ABC-SMC) to assess proposed additions and uncertain 
 enzyme/reaction relationships in a COBRA constraint-based metabolic model, and
@@ -13,6 +14,7 @@ maximum parsimony with a particular set of experimental observations.
 
 SUMMARY
 =======
+
 A specific reaction can be catalysed by one or more (or no) enzymes, which are
 either known or unknown.  The assertion that a particular reaction is catalysed
 by a particular enzyme, a Reaction/Enzyme Link (or REL), is tested in this
@@ -46,6 +48,7 @@ accompanying paper.
 
 LICENSE
 =======
+
 This program is free software, distributed under the terms of the GNU GPL:
 you can redistribute it and/or modify it under the terms of the GNU General
 Public License as published by the Free Software Foundation, either version 3
@@ -61,21 +64,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 INSTALLATION
 ============
+
 This module does not need to be installed; if the directory containing this
 file is in the PYTHONPATH, it can be imported using:
 
-C{import abcsmc}
+`import abcsmc`
 
 PREREQUISITES
 =============
+
 This module has been tested with Python 2.7
 
 Required non-standard Python packages (tested versions specified in brackets):
 
-COBRApy (0.4.0b4)
-NumPy (1.10.4)
-LibSBML (5.12.1) - for SBML import and export
-Pyparsing (2.0.3) - For GPR <--> list of enzymes translation
+- COBRApy (0.4.0b4)
+- NumPy (1.10.4)
+- LibSBML (5.12.1) for SBML import and export
+- Pyparsing (2.0.3) for GPR <--> list of enzymes translation
 
 This package also requires the installation of a compatible linear optimisation
 program.  Testing has shown Gurobi to be up to 30 times faster than the free
@@ -84,12 +89,36 @@ solely for the purposes of research.
 
 EXAMPLE USAGE
 =============
+Most C{AbcProblem} arguments are optional (or conditionally optional), the
+following are required:
+
+* An SBML file containing the model including predicted RELs
+* An experiment file* containing results of gene essentiality analyses 
+* if the 'include_all' variable is set to False (default) then a list of 
+candidate RELs for inclusion/exclusion must be supplied (e.g.
+'example/candidate_rels.tsv')
+
+Default values for variables are set for the purposes of testing, rather than
+full analysis.  This example uses non-default values for several optional
+variables.    
+
 Create problem object:
 
 C{abc_problem = AbcProblem(
- 
+                    model_file='example/model.xml',
+                    experiments_file='example/experiments.xml',
+                    prior_file='example/candidate_rels.tsv',
+                    particles_per_population=20,
+                    num_populations_max=6
+ )}
 
- 
+
+
+
+
+
+* The experiment file has a specific format, as set out in the file 
+'example/experiments.tsv'
 
 @author: wbryant
 '''
