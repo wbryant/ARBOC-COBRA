@@ -92,11 +92,11 @@ EXAMPLE USAGE
 Most C{AbcProblem} arguments are optional (or conditionally optional), the
 following are required:
 
-* An SBML file containing the model including predicted RELs
-* An experiment file* containing results of gene essentiality analyses 
-* if the 'include_all' variable is set to False (default) then a list of 
-candidate RELs for inclusion/exclusion must be supplied (e.g.
-'example/candidate_rels.tsv')
+- An SBML file containing the model including predicted RELs
+- An experiment file [1]_ containing results of gene essentiality analyses
+- if the 'include_all' variable is set to False (default) then a list 
+  of candidate RELs for inclusion/exclusion must be supplied (e.g.
+  'example/candidate_rels.tsv')
 
 Default values for variables are set for the purposes of testing, rather than
 full analysis.  This example uses non-default values for several optional
@@ -104,21 +104,20 @@ variables.
 
 Create problem object:
 
-C{abc_problem = AbcProblem(
-                    model_file='example/model.xml',
-                    experiments_file='example/experiments.xml',
-                    prior_file='example/candidate_rels.tsv',
-                    particles_per_population=20,
-                    num_populations_max=6
- )}
+.. code-block:: python
+
+    abc_problem = AbcProblem(
+        model_file='example/model.xml',
+        experiments_file='example/experiments.xml',
+        prior_file='example/candidate_rels.tsv',
+        particles_per_population=20,
+        num_populations_max=6
+    )
+    
 
 
-
-
-
-
-* The experiment file has a specific format, as set out in the file 
-'example/experiments.tsv'
+.. [1] The experiment file has a specific format, as set out in the file
+       'example/experiments.tsv'
 
 @author: wbryant
 '''
