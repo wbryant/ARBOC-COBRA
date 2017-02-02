@@ -1,17 +1,18 @@
-.. ABC-SMC for GEM development documentation master file, created by
-   sphinx-quickstart on Wed Feb  1 11:30:33 2017.
+.. ABC-SMC for GEM Improvement documentation master file, created by
+   sphinx-quickstart on Thu Feb  2 12:48:21 2017.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to ABC-SMC for GEM development's documentation!
+Welcome to ABC-SMC for GEM Improvement's documentation!
 =======================================================
 
 .. toctree::
-    :maxdepth: 2
-    
-.. automodule:: abcsmc
-    :members:
+   :maxdepth: 2
+   :caption: Contents:
 
+.. autoclass:: abcsmc.AbcProblem
+    :members:
+    :undoc-members:
 
 Indices and tables
 ==================

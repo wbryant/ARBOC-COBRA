@@ -1,0 +1,207 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Welcome to ABC-SMC for GEM Improvement’s documentation! &#8212; ABC-SMC for GEM Improvement  documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-abc-smc-for-gem-improvement-s-documentation">
+<h1>Welcome to ABC-SMC for GEM Improvement&#8217;s documentation!<a class="headerlink" href="#welcome-to-abc-smc-for-gem-improvement-s-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<dl class="class">
+<dt id="abcsmc.AbcProblem">
+<em class="property">class </em><code class="descclassname">abcsmc.</code><code class="descname">AbcProblem</code><span class="sig-paren">(</span><em>model</em>, <em>biomass_id</em>, <em>prior_dict=None</em>, <em>prior_file=None</em>, <em>experiments=None</em>, <em>experiments_file=None</em>, <em>particles_per_population=None</em>, <em>num_populations_max=None</em>, <em>rel_priors=None</em>, <em>default_prior_value=0.99</em>, <em>enzyme_limit=10</em>, <em>objective_name='Biomass'</em>, <em>epsilon_0=0.5</em>, <em>epsilon_T=0.285</em>, <em>p_0=0.2</em>, <em>alpha=None</em>, <em>include_all=False</em>, <em>original_model_rxn_ids=None</em>, <em>solver=None</em>, <em>prior_multiplier=None</em>, <em>test_type=None</em>, <em>test_model_pre_abc=None</em>, <em>include_fn_reactions=None</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem" title="Permalink to this definition">¶</a></dt>
+<dd><p>An ABC-SMC problem with functions for solving it.</p>
+<p>This class contains all of the information and functions for solving the
+problem of which RELs should be retained in a proposed model.  When solving
+the problem an instance of this class is created, then the simulation is
+run with the contained functions.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> (<em>str</em>) &#8211; The filename of the complete model encoded in SBML, including
+all proposed RELs</li>
+<li><strong>biomass_id</strong> (<em>str</em>) &#8211; The ID for the biomass reaction to be used for gene
+essentiality testing</li>
+<li><strong>experiments</strong> (<em>str</em>) &#8211; The filename of the list of experiment results that will
+be tested in the model</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="abcsmc.AbcProblem.create_population_t">
+<code class="descname">create_population_t</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.create_population_t" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.create_prior_estimate">
+<code class="descname">create_prior_estimate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.create_prior_estimate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use theta_accepted_set to estimate new prior for determining transition probabilities.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.export_particle_rels">
+<code class="descname">export_particle_rels</code><span class="sig-paren">(</span><em>timepoint</em>, <em>particle_index</em>, <em>rel_output_file</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.export_particle_rels" title="Permalink to this definition">¶</a></dt>
+<dd><p>Export RELs from any particle from any of the timepoints.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.get_epsilon">
+<code class="descname">get_epsilon</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.get_epsilon" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.get_epsilon_linear">
+<code class="descname">get_epsilon_linear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.get_epsilon_linear" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.get_p_transition">
+<code class="descname">get_p_transition</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.get_p_transition" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.initialise_particle">
+<code class="descname">initialise_particle</code><span class="sig-paren">(</span><em>particle_id</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.initialise_particle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new particle from the current ABC timepoint.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.record_previous_results">
+<code class="descname">record_previous_results</code><span class="sig-paren">(</span><em>theta_accepted_set</em>, <em>ln_w_accepted_set</em>, <em>distance_set</em>, <em>proposed_theta_idx_set</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.record_previous_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add the results from the previous run to the full lists of results.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.set_rel_priors">
+<code class="descname">set_rel_priors</code><span class="sig-paren">(</span><em>rel_priors</em>, <em>prior_dict</em>, <em>include_all=False</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.set_rel_priors" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.step_forwards">
+<code class="descname">step_forwards</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.step_forwards" title="Permalink to this definition">¶</a></dt>
+<dd><p>Increment time and calculate new problem parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.test_theta">
+<code class="descname">test_theta</code><span class="sig-paren">(</span><em>thetaTest</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.test_theta" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply a manually defined theta and test against the experiments in
+the ABC problem, returning a ResultSet instance with the results in it.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="abcsmc.AbcProblem.update_weights">
+<code class="descname">update_weights</code><span class="sig-paren">(</span><em>ln_weights=None</em><span class="sig-paren">)</span><a class="headerlink" href="#abcsmc.AbcProblem.update_weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Normalise outputed weights and update w_set_prev.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Welcome to ABC-SMC for GEM Improvement&#8217;s documentation!</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2017, Dr William A Bryant.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.9</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
