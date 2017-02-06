@@ -195,6 +195,22 @@ class AbcProblem():
         at time t - 1 would be alpha.  For instance, with the default value,
         0.01 of the particles from the previous timepoint would have been
         accepted in the following timepoint.
+    solver : str
+        (Default = 'glpk') The ID for the solver to be used in FBA
+    prior_multiplier : float
+        (Default = None) If set, reduce all prior values by this fraction
+        before commencing ABC-SMC.  (Used for tuning algorithm.)
+    test_type : str
+        (Default = None) If set to 'essential_and_orphan_mets' use score
+        function that is a combination of essential gene tests and the
+        proportion of metabolites that are connected to only a single reaction
+    test_model_pre_abc : Boolean
+        (Default = True) If true, once the model has been prepared for ABC-SMC,
+        check that the created model can be optimized before running algorithm
+    include_fn_reactions : Boolean
+        (Default = True) In addition to all specified RELs, if True, add all
+        RELs for consideration in the ABC-SMC run for all genes that are
+        falsely identified as being essential.  
     
     """
     
@@ -211,8 +227,7 @@ class AbcProblem():
             epsilon_T=0.285,
             p_0=0.2,
             alpha=0.01,
-            original_model_rxn_ids=None,
-            solver=None,
+            solver='glpk',
             prior_multiplier=None,
             test_type=None,
             test_model_pre_abc=True,
@@ -231,7 +246,6 @@ class AbcProblem():
         """
         
         print("Loading model ...")
-        solver = solver or 'glpk'        
         if isinstance(model, basestring):
             self.model = create_extended_model(model, biomass_id, solver=solver)
         elif isinstance(model, ExtendedCobraModel()):
@@ -263,18 +277,6 @@ class AbcProblem():
         self.w_set = None
         self.default_prior_value = default_prior_value
         abc_reactions = []
-        
-        if original_model_rxn_ids:
-            # # Test original model
-            print("Testing original model ...")
-            model_orig = deepcopy(self.model)
-            for reaction in model_orig.reactions:
-                if reaction.id not in original_model_rxn_ids:
-                    reaction.remove_from_model()
-            model.repair()     
-            original_results, _ = conduct_experiments(model_orig, self.experiments)
-            print(" => Results:\n")
-            original_results.stats()    
                  
         if test_model_pre_abc:
             # # Test full model
@@ -403,7 +405,8 @@ class AbcProblem():
             self.model.theta_rxn_map[idx] = self.model.reactions.get_by_id(rxn_id)
             rxn_theta_map[rxn_id] = idx
         self.prior_set_original = deepcopy(self.prior_set)       
-        # # Use prior_multiplier to adjust entire prior enabling tuning of particle finders
+        
+        ## Use prior_multiplier to adjust entire prior enabling tuning of particle finders
         if prior_multiplier or (prior_multiplier == 0):
             print("Using prior multiplier ...")
             for idx, prior_val in enumerate(self.prior_set):
