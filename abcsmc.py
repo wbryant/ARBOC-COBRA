@@ -161,6 +161,10 @@ class AbcProblem():
         (Optional) A file containing confidence values for all reactions to be
         considered for addition/removal in ABC-SMC.  If not specified, all
         reactions will be included
+    genes_abc_file : str
+        (Optional) A file containing a list of genes with one or more suspect
+        functions.  Each reaction containing this gene in its GPR will be added
+        to the ABC-SMC algorithm - NOT YET IMPLEMENTED
     particles_per_population : int
         (Default = 10) The number of models that must be accepted in each
         step of the ABC problem, each passing the distance criterion
@@ -219,6 +223,7 @@ class AbcProblem():
             biomass_id,
             experiments,
             prior_file=None,
+            genes_abc_file=None,
             particles_per_population=10,
             num_populations_max=5,
             default_prior_value=0.99,
@@ -233,18 +238,7 @@ class AbcProblem():
             test_model_pre_abc=True,
             include_fn_reactions=True):
 
-        """
-        num_populations = number of iterations to run through;
-        model = ExtendedCobraModel to be tested;
-        get_epsilon = a function of t to calculate epsilon;
-        get_p_transition = a function of t to calculate p_transition;
-        abc_reactions: list of reaction IDs to be included;
-        prior_dict: dictionary of predefined prior values for specific reactions (rxn ID is key);
-        default_prior: default prior;
-        include_all: if True, include all non-exchange reactions in the ABC
-        
-        """
-        
+        ## Load model
         print("Loading model ...")
         if isinstance(model, basestring):
             self.model = create_extended_model(model, biomass_id, solver=solver)
@@ -253,38 +247,42 @@ class AbcProblem():
         else:
             print("Model not specified, exiting ...")
             sys.exit(1)  
-            
+        
+        ## Load experiments
         print("Loading experiments ...")
         if isinstance(experiments, basestring):
             self.experiments = import_expt_data(self.model, objective_id=biomass_id, data_file=experiments)
         else:
             self.experiments = deepcopy(experiments)         
         
+        ## Initialise parameters and variables
         self.test_type = test_type or None        
         self.t = 0
         self.N = particles_per_population
         self.T = num_populations_max
         self.p_0 = p_0
+        self.p_t = p_0
         self.epsilon_0 = epsilon_0
+        self.epsilon_t = epsilon_0
         self.epsilon_T = epsilon_T
         self.alpha = alpha
-        self.get_p_transition()
-        self.get_epsilon()
+        self.default_prior_value = default_prior_value
         self.theta_set_prev = None
         self.w_set_prev_unnorm = None
         self.w_set_prev = None
         self.theta_set = None
         self.w_set = None
-        self.default_prior_value = default_prior_value
         abc_reactions = []
-                 
+        
+        ## Test imported model before modification for ABC-SMC
         if test_model_pre_abc:
             # # Test full model
-            print("Testing full model ...")
+            print("Testing full inputted model ...")
             initial_results, _ = conduct_experiments(self.model, self.experiments)
             print(" => Results:\n")
             initial_results.stats()        
         
+        ## Load priors by reaction from prior file, if specified
         model_reaction_ids = [reaction.id for reaction in self.model.reactions]            
         prior_dict = {}
         print("Loading prior values ...")
@@ -299,20 +297,18 @@ class AbcProblem():
                     sys.exit(1)
                 try:
                     prior_dict[details[0]] = float(details[1])
+                    abc_reactions.append(details[0])
                 except:
                     prior_dict[details[0]] = self.default_prior_value
                 # print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
-            f_in.close()
+            f_in.close() 
         else:
             print("\tIncluding all non-exchange reactions ...")
-            for reaction in self.model.reactions:
-                if not reaction.id.startswith('EX_'):
-                    abc_reactions.append(reaction.id)
+            for reaction_id in model_reaction_ids:
+                if not reaction_id.startswith('EX_'):
+                    abc_reactions.append(reaction_id)
             print("\t{} reactions in total".format(len(abc_reactions)))
         print("{} in prior_dict".format(len(prior_dict)))
-        
-        for rxn_id, _ in prior_dict.iteritems():
-            abc_reactions.append(rxn_id)
         abc_reactions = list(set(abc_reactions))
         
         # # Split all included reactions into individual enzyme/reaction pairs 
@@ -426,18 +422,18 @@ class AbcProblem():
                 self.num_expts_neg += 1       
         self.num_rxns = len(self.model.reactions)
                
-        # # Set particle ID format according to how many particles there are
+        ## Set particle ID format according to how many particles there are
         id_length = str(int(ceil(log10(self.N))))
         self.id_format = "{:0" + id_length + "d}"
         
-        # # Initialise results variables, for storing run results
+        ## Initialise results variables, for storing run results
         self.results_theta = []
         self.results_w = []
         self.results_d = []
         self.thetas_selected = []
         self.intermediate_theta_dict = {}
 
-        # # Calculate ln_pi_max for calculation of pi_rel in weight calculations
+        ## Calculate ln_pi_max for calculation of pi_rel in weight calculations
         ln_pi_max = 0
         for p in self.prior_set:
             if p < 0.5:
@@ -446,10 +442,12 @@ class AbcProblem():
                 ln_pi_max += ln(p) 
         self.ln_pi_max = ln_pi_max
         
-        # # Finding media with >10 experiments, for ensuring testing does not
-        # # waste time.  Any found will have all reactions tested for 
-        # # essentiality and any genotype removing any of these reactions will
-        # # automatically return essentiality without running FBA
+        ## Finding media with >10 experiments, for ensuring testing does not
+        ## waste time.  Any found will have all reactions tested for 
+        ## essentiality and any genotype removing any of these reactions will
+        ## automatically return essentiality without running FBA
+        
+        ## Find all media that are consistent across >10 experiments
         media_list = []
         for expt in self.experiments:
             media_list.append(expt.medium_components)
@@ -469,7 +467,7 @@ class AbcProblem():
         self.precalc_media = precalc_media
         self.precalc_media_frozensets = precalc_media_lists
         
-        # # For each reaction, find all RELs
+        ## For each ABC reaction, find all RELs
         abc_reaction_lists = []
         for rxn_id in abc_reactions:
             rxn_list = []
@@ -478,6 +476,7 @@ class AbcProblem():
                     rxn_list.append(reaction)
             abc_reaction_lists.append(rxn_list)
         
+        ## Test that model for submission runs on all precalculated media
         if test_model_pre_abc:
             print("Testing full model with precalculated media ...")
             for medium in self.precalc_media:
@@ -493,7 +492,10 @@ class AbcProblem():
                 sys.exit(1)
             else:
                 print("... done.")
-
+        
+        ## Determine which ABC reactions (split into REL sets) are essential.
+        ## If it is essential on any of the precalc media, then any model
+        ## without this reaction will be rejected without testing
         essential_abc_reaction_sets = []
         count_rxn_lists = loop_counter(
             len(abc_reaction_lists),
@@ -518,10 +520,10 @@ class AbcProblem():
         count_rxn_lists.stop()
         print(" => {} ABC reactions essential.".format(len(essential_abc_reaction_sets)))
         
-        # # CONVERT ESSENTIAL REACTION SETS TO THETA SUBSETS - IF ONLY A SINGLE
-        # # THETA, SET PRIOR TO ONE!
-        # # This step is to save time: if all enzymes for an essential reaction
-        # # are removed, model will not run so can be discarded without FBA
+        ## CONVERT ESSENTIAL REACTION SETS TO THETA SUBSETS - IF ONLY A SINGLE
+        ## THETA, SET PRIOR TO ONE!
+        ## This step is to save time: if all enzymes for an essential reaction
+        ## are removed, model will not run so can be discarded without FBA
         essential_theta_sets = []
         for rxn_list in essential_abc_reaction_sets:
             if len(rxn_list) == 1:
@@ -532,11 +534,10 @@ class AbcProblem():
                 for rxn in rxn_list:
                     theta_indices.append(rxn_theta_map[rxn.id])
                 essential_theta_sets.append(set(theta_indices))
-        
         self.essential_theta_sets = essential_theta_sets
 
-        # # FIND BLOCKED REACTIONS AND SET BOUNDS TO 0
-        # # To save time during FBA
+        ## FIND BLOCKED REACTIONS AND SET BOUNDS TO 0
+        ## To save time during FBA
         print("Setting bounds of blocked reactions to 0 ...")
         blocked_rxn_ids = find_blocked_reactions(self.model, open_exchanges=True)
         num_restricted = 0
@@ -549,11 +550,11 @@ class AbcProblem():
             except:
                 print(" - 'Blocked' reaction '{}' could not be found".format(
                     rxn_id
-                ))
-        
+                ))       
         print(" => {} reactions had bounds restricted to 0.".format(num_restricted))
         
-        
+        ## Find the number of experimentally essential genotypes for which all
+        ## knocked out genes are present in the model 
         num_essential_expts = None
         if not(not(self.test_type)) & (self.test_type == 'essential_and_orphan_mets'):        
             # get genes in model
@@ -564,20 +565,14 @@ class AbcProblem():
                     gene_set = set(expt.genotype)
                     if gene_set.issubset(gene_set_all):
                         num_essential_expts += 1
-            print("There are {} experiments showing essentiality".format(num_essential_expts))
+            print("There are {} experiments showing essentiality"
+                .format(num_essential_expts)
+            )
         self.num_essential_expts = num_essential_expts
         
-        
-#         ## Test full model balanced accuracy
-#         print("Testing full ABC model ...")
-#         particle_full = self.initialise_particle(0)
-#         particle_full.conduct_experiments()
-#         print(" => balanced accuracy = {}".format(1.0-particle_full.result))
-# #         print(" => Results:\n")
-# #         initial_results.stats() 
-
+        ## Test that none of the REL expansions have broken the model 
         if test_model_pre_abc:
-            # # Test full model
+            ## Test full model
             print("\nTesting full ABC model ...")
             initial_results, _ = conduct_experiments(self.model, self.experiments)
             print(" => Results:\n")
@@ -585,24 +580,11 @@ class AbcProblem():
        
         print("ABC initialisation complete.")
                 
-    
-#     def set_rel_priors(self, rel_priors, prior_dict, include_all=False):
-# #         """Where there is belief about certain enzyme/reaction pairs, 
-# #         apply this to the relevant reaction priors.
-# #         """
-#         if rel_priors:
-#             for rel_prior in rel_priors:
-#                 base_rxn_id = rel_prior[0]
-#                 gene_set = set(rel_prior[1])
-#                 prior_value = rel_prior[2]
-#                 id_string = base_rxn_id + "(_enz[0-9]+)*$"
-#                 for rxn in self.model.reactions:
-#                     if re.match(id_string, rxn.id):
-#                         enzrxn_gene_set = set(gene.id for gene in rxn.genes)
-#                         if (enzrxn_gene_set | gene_set) == (enzrxn_gene_set & gene_set):
-#                             prior_dict[rxn.id] = prior_value
-#         return prior_dict
-
+    def get_p_transition(self):
+        ## Get p value for this timepoint (p_t)
+        step_size = self.p_0 / float(self.T)
+        p_t = self.p_0 - step_size * self.t
+        self.p_t = p_t
 
     def initialise_particle(self, particle_id):
         """Create a new particle from the current ABC timepoint."""
@@ -688,10 +670,10 @@ class AbcProblem():
         self.w_set_prev_unnorm = weights_unnorm 
         self.w_set_prev = weights_norm
     
-    def get_epsilon_linear(self):
-        step_size = (self.epsilon_0 - self.epsilon_T) / (float(self.T) - 1)
-        epsilon_t = self.epsilon_0 - step_size * self.t
-        self.epsilon_t = epsilon_t
+#     def get_epsilon_linear(self):
+#         step_size = (self.epsilon_0 - self.epsilon_T) / (float(self.T) - 1)
+#         epsilon_t = self.epsilon_0 - step_size * self.t
+#         self.epsilon_t = epsilon_t
     
     def get_epsilon(self):
         # # Taking into account distance scores for the previous population, 
@@ -705,10 +687,7 @@ class AbcProblem():
         quantile_idx = int(self.alpha * len(distance_set))
         self.epsilon_t = distance_set_sorted[quantile_idx]
         
-    def get_p_transition(self):
-        step_size = self.p_0 / float(self.T)
-        p_t = self.p_0 - step_size * self.t
-        self.p_t = p_t
+
     
     def test_theta(self, thetaTest):
         """Apply a manually defined theta and test against the experiments in 
