@@ -30,12 +30,12 @@ def main(argv=None): # IGNORE:C0111
         sys.exit()
     
     print("Finding acceptable theta ...")
-    theta_accepted, ln_w, distance, proposed_theta_idx = particle.find_accepted_theta()
+    particle.find_accepted_theta()
     print("... accepted theta.")
     
     ## Write results to output file
     f_out = open(result_file, 'w')
-    f_out.write("{}\t{}\t{}\t{}".format(",".join([str(int(theta)) for theta in theta_accepted]), str(ln_w), str(distance), str(proposed_theta_idx)))
+    f_out.write("{}\t{}\t{}\t{}".format(",".join([str(int(theta)) for theta in particle.theta_accepted]), str(particle.ln_w), str(particle.distance), str(particle.proposed_theta_idx)))
     f_out.close()
     print("Printed results to file.")
     

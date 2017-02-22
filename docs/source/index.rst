@@ -10,10 +10,16 @@ Welcome to ABC-SMC for GEM Improvement's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-.. autoclass:: abcsmc.AbcProblem
+.. 
+    autoclass:: abcsmc.AbcProblem
     :members:
     :undoc-members:
 
+.. automodule:: abcsmc
+    :members:
+    :undoc-members:
+    
+    
 Indices and tables
 ==================
 
