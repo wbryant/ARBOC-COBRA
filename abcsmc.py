@@ -319,6 +319,11 @@ class AbcProblem():
             print("\t{} reactions in total".format(len(abc_reactions)))
         print("{} in prior_dict".format(len(prior_dict)))
         abc_reactions = list(set(abc_reactions))
+
+        ## Create original lb/ub vars for reference
+        for rxn in self.model.reactions:
+            rxn.lb_orig = deepcopy(rxn.lower_bound)
+            rxn.ub_orig = deepcopy(rxn.upper_bound)
         
         ## Split all included reactions into individual enzyme/reaction pairs 
         ## and assign prior values according to prior_dict
@@ -553,11 +558,6 @@ class AbcProblem():
                 ))     
         print(" => {} reactions had bounds restricted to 0.".format(num_blocked_reactions))
         self.num_rxns_blocked_orig = num_blocked_reactions
-
-        ## Create original lb/ub vars for reference
-        for rxn in self.model.reactions:
-            rxn.lb_orig = deepcopy(rxn.lower_bound)
-            rxn.ub_orig = deepcopy(rxn.upper_bound)
         
         ## Find the number of experimentally essential genotypes for which all
         ## knocked out genes are present in the model 
@@ -821,7 +821,7 @@ class Particle():
                 ## Apply proposed theta and calculate distance
                 self.apply_proposed_theta()
                 if not(not(self.test_type)) & (self.test_type == 'essential_and_orphan_mets'):
-                    self.conduct_experiments_essential_and_orphan_mets(debug=debug, verbose=False)
+                    self.conduct_experiments_essential_and_blocked_rxns(debug=debug, verbose=False)
                 else:
                     self.conduct_experiments(debug=debug)
                 if debug:
@@ -1196,6 +1196,7 @@ class Particle():
         num_fp = 0
         num_tests_remaining = len(valid_experiments)
         self.num_tests_checked = 0
+        print("\nFraction blocked = {}".format(fraction_rendered_blocked))
         for experiment in valid_experiments:
             _, _, tn_add, fp_add, _ = experiment.test(self.model, self.precalc_media_frozensets)
             self.num_tests_checked += 1
@@ -1212,7 +1213,8 @@ class Particle():
             min_dist_tot = blocked_weight*fraction_rendered_blocked\
                         +(1-blocked_weight)*min_dist_expts
                         
-            self.vprint("{}\t{}\t{}".format(num_tests_remaining, min_dist_tot, max_dist_tot), verbose)
+            #self.vprint("{}\t{}\t{}".format(num_tests_remaining, min_dist_tot, max_dist_tot), verbose)
+            print("{}\t{:4}\t{:4}".format(num_tests_remaining, min_dist_tot, max_dist_tot))
             
             if min_dist_tot > self.epsilon:
                 self.vprint("Minimum distance > epsilon, aborting ...", verbose)
@@ -1252,7 +1254,8 @@ class Particle():
           
 class Experiment():
     """
-    The details of a real experiment formatted for testing a constraint-based model.
+    The details of a real experiment formatted for testing a constraint-based
+    model.
     """
     
     def __init__(self, expt_id, medium, result, genotype=None, objective=None, old_expt=None):
@@ -1356,7 +1359,8 @@ class ExtendedCobraModel(ArrayBasedModel):
     """Additional functionality for helping to use COBRA model."""
             
     def get_relevant_gene_ids(self):
-        """Get a list of gene IDs for all genes implicated in non-zero flux reactions."""
+        """Get a list of gene IDs for all genes in non-zero flux reactions.
+        """
         
         relevant_genes_list = []
         for reaction in self.reactions:
@@ -1491,6 +1495,8 @@ class ExtendedCobraModel(ArrayBasedModel):
         
         
     def opt(self, new_objective=None, time_limit=1):
+        """Use self.optimize, returning only objective value or 0.
+        """
         if new_objective:
             self.change_objective(new_objective)
         
@@ -1520,7 +1526,7 @@ class ExtendedCobraModel(ArrayBasedModel):
     
     def set_medium(self, medium_dict=None, debug=False):
         """
-        Set exchanges of all exchange reactions to zero, or what is in medium_dict.
+        Set limits of all exchange reactions to zero, or what is in medium_dict.
         medium_dict: key = reaction ID, value = new lower bound.
         """
         exchange_rxn_dict = {}
