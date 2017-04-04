@@ -211,13 +211,17 @@ class AbcProblem():
         (Default = None) If set to 'essential_and_orphan_mets' use score
         function that is a combination of essential gene tests and the
         proportion of metabolites that are connected to only a single reaction
-    test_model_pre_abc : Boolean
+    test_model_pre_abc : boolean
         (Default = True) If true, once the model has been prepared for ABC-SMC,
         check that the created model can be optimized before running algorithm
-    include_fn_reactions : Boolean
+    include_fn_reactions : boolean
         (Default = True) In addition to all specified RELs, if True, add all
         RELs for consideration in the ABC-SMC run for all genes that are
         falsely identified as being essential.  
+    split_reactions : boolean
+        (Default = True) If enzymes for specifc reactions are to be 
+        individually allowed to be removed, reactions must be split into RELs.
+        Set to false if reactions are already split into RELs
     
     """
     
@@ -239,7 +243,8 @@ class AbcProblem():
             prior_multiplier=None,
             test_type=None,
             test_model_pre_abc=True,
-            include_fn_reactions=True):
+            include_fn_reactions=True,
+            split_reactions=True):
 
         ## Load model
         print("Loading model ...")
@@ -328,32 +333,33 @@ class AbcProblem():
             rxn.lb_orig = deepcopy(rxn.lower_bound)
             rxn.ub_orig = deepcopy(rxn.upper_bound)
         
-        ## Split all included reactions into individual enzyme/reaction pairs 
-        ## and assign prior values according to prior_dict
-        counter = loop_counter(len(abc_reactions), 'Splitting ABC reactions')
-        for rxn_id in abc_reactions:        
-            enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
-            num_enzrxns = len(enzrxn_ids)
-            if num_enzrxns == 0:
-                num_enzrxns = 1
-            if rxn_id in prior_dict:
-                prior_value = prior_dict[rxn_id] / sqrt(float(num_enzrxns))
-            else:
-                # prior_value = default_prior_value/sqrt(float(num_enzrxns))
-                prior_value = default_prior_value
-            if enzrxn_ids:
-                for enzrxn_id in enzrxn_ids:
-                    prior_dict[enzrxn_id] = prior_value
-                if non_enz_rxn_id:
-                    prior_dict[non_enz_rxn_id] = prior_value / 100.0
-            else:        
-                if non_enz_rxn_id:
-                    prior_dict[non_enz_rxn_id] = self.default_prior_value
-            counter.step()
-        counter.stop()
+        if split_reactions:
+            ## Split all included reactions into individual enzyme/reaction pairs 
+            ## and assign prior values according to prior_dict
+            counter = loop_counter(len(abc_reactions), 'Splitting ABC reactions')
+            for rxn_id in abc_reactions:        
+                enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
+                num_enzrxns = len(enzrxn_ids)
+                if num_enzrxns == 0:
+                    num_enzrxns = 1
+                if rxn_id in prior_dict:
+                    prior_value = prior_dict[rxn_id] / sqrt(float(num_enzrxns))
+                else:
+                    # prior_value = default_prior_value/sqrt(float(num_enzrxns))
+                    prior_value = default_prior_value
+                if enzrxn_ids:
+                    for enzrxn_id in enzrxn_ids:
+                        prior_dict[enzrxn_id] = prior_value
+                    if non_enz_rxn_id:
+                        prior_dict[non_enz_rxn_id] = prior_value / 100.0
+                else:        
+                    if non_enz_rxn_id:
+                        prior_dict[non_enz_rxn_id] = self.default_prior_value
+                counter.step()
+            counter.stop()
 
-        abc_running_total = len(prior_dict)
-        print(" => {} RELs included".format(abc_running_total))
+            abc_running_total = len(prior_dict)
+            print(" => {} RELs included".format(abc_running_total))
 
         if include_fn_reactions:
             ## FIND RELS PRODUCING FALSE NEGATIVE PREDICTIONS AND ADD TO ABC-SMC        
