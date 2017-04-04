@@ -122,7 +122,10 @@ Create problem object:
 @author: wbryant
 """
 
-from cobra.core import ArrayBasedModel
+try:
+    from cobra.core import ArrayBasedModel
+except:
+    from cobra.core.arraybasedmodel import ArrayBasedModel
 from cobra.io.sbml import create_cobra_model_from_sbml_file 
 from cobra.manipulation.delete import delete_model_genes, undelete_model_genes, find_gene_knockout_reactions
 from cobra.flux_analysis.variability import find_blocked_reactions
