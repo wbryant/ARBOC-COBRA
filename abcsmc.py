@@ -305,17 +305,19 @@ class AbcProblem():
             f_in = open(prior_file, 'r')
             for line in f_in:
                 details = line.strip().split("\t")
-                if details[0] not in model_reaction_ids:
-                    print("At least one reaction ID is not recognised ('{}')".format(details[0]))
-                    for reaction_id in model_reaction_ids[0:9]:
-                        print reaction_id
+                reaction_id = details[0]
+                prior_value = details[1]
+                if reaction_id not in model_reaction_ids:
+                    print("At least one reaction ID is not recognised ('{}')".format(reaction_id))
+                    for model_reaction_id in model_reaction_ids[0:9]:
+                        print model_reaction_id
                     sys.exit(1)
-                if details[0] not in blocked_reaction_ids:
+                if reaction_id not in blocked_reaction_ids:
                     try:
-                        prior_dict[details[0]] = float(details[1])
-                        abc_reactions.append(details[0])
+                        prior_dict[reaction_id] = float(prior_value)
+                        abc_reactions.append(reaction_id)
                     except:
-                        prior_dict[details[0]] = self.default_prior_value
+                        prior_dict[reaction_id] = self.default_prior_value
                 # print("\t'{}':\t'{}'".format(details[0],prior_dict[details[0]]))
             f_in.close() 
         else:
@@ -337,24 +339,30 @@ class AbcProblem():
             ## Split all included reactions into individual enzyme/reaction pairs 
             ## and assign prior values according to prior_dict
             counter = loop_counter(len(abc_reactions), 'Splitting ABC reactions')
-            for rxn_id in abc_reactions:        
-                enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
-                num_enzrxns = len(enzrxn_ids)
-                if num_enzrxns == 0:
-                    num_enzrxns = 1
-                if rxn_id in prior_dict:
-                    prior_value = prior_dict[rxn_id] / sqrt(float(num_enzrxns))
+            for rxn_id in abc_reactions:
+                ## Currently, imported reactions that are already split into
+                ## RELs have 'enz1'-type endings, so these should not be split
+                ## again
+                if re.search('_enz\d*(_[a-z])*$',rxn_id):
+                    pass
                 else:
-                    # prior_value = default_prior_value/sqrt(float(num_enzrxns))
-                    prior_value = default_prior_value
-                if enzrxn_ids:
-                    for enzrxn_id in enzrxn_ids:
-                        prior_dict[enzrxn_id] = prior_value
-                    if non_enz_rxn_id:
-                        prior_dict[non_enz_rxn_id] = prior_value / 100.0
-                else:        
-                    if non_enz_rxn_id:
-                        prior_dict[non_enz_rxn_id] = self.default_prior_value
+                    enzrxn_ids, non_enz_rxn_id = self.model.split_rxn_by_enzymes(rxn_id, enzyme_limit)
+                    num_enzrxns = len(enzrxn_ids)
+                    if num_enzrxns == 0:
+                        num_enzrxns = 1
+                    if rxn_id in prior_dict:
+                        prior_value = prior_dict[rxn_id] / sqrt(float(num_enzrxns))
+                    else:
+                        # prior_value = default_prior_value/sqrt(float(num_enzrxns))
+                        prior_value = default_prior_value
+                    if enzrxn_ids:
+                        for enzrxn_id in enzrxn_ids:
+                            prior_dict[enzrxn_id] = prior_value
+                        if non_enz_rxn_id:
+                            prior_dict[non_enz_rxn_id] = prior_value / 100.0
+                    else:        
+                        if non_enz_rxn_id:
+                            prior_dict[non_enz_rxn_id] = self.default_prior_value
                 counter.step()
             counter.stop()
 
@@ -372,7 +380,7 @@ class AbcProblem():
                 expt_no_genotype = deepcopy(expt)
                 expt_no_genotype.genotype = []
                 if len(expt.genotype) == 1:
-                    a, b, c, d, fn = expt.test(self.model)
+                    _, _, _, _, fn = expt.test(self.model)
                     if fn:
                         ## Which reaction is implicated?
                         ko_rxns = self.model.set_genotype(expt.genotype, return_ko_rxns=True)
@@ -843,7 +851,7 @@ class Particle():
                 ## failed_theta_sets and propose new particle
                 self.result = 3
                 
-            ## If model is close enough to experiments, accept and return theta and calculated weight
+            ## If model is close enough to experiments, record theta and calculated weight
             if self.result == 2:
                 failed_precalc += 1
             elif self.result == 3:
