@@ -1232,6 +1232,7 @@ class Particle():
             min_dist_tot = blocked_weight*fraction_rendered_blocked\
                         +(1-blocked_weight)*min_dist_expts
             
+            current_distance = 1
             if num_fp+num_tn > 0:
                 current_distance = num_fp/(num_fp+num_tn)
             
