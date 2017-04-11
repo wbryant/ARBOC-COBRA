@@ -1232,7 +1232,8 @@ class Particle():
             min_dist_tot = blocked_weight*fraction_rendered_blocked\
                         +(1-blocked_weight)*min_dist_expts
             
-            current_distance = num_fp/(num_fp+num_tn)
+            if num_fp+num_tn > 0:
+                current_distance = num_fp/(num_fp+num_tn)
             
             #self.vprint("{}\t{}\t{}".format(num_tests_remaining, min_dist_tot, max_dist_tot), verbose)
             print("{}\t{:4}\t{:4}\t{:4}".format(
