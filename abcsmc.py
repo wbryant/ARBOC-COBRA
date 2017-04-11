@@ -1061,6 +1061,8 @@ class Particle():
 #             self.result = 1
 #             return None
         
+        epsilon = epsilon or self.epsilon
+        
         opt_cutoff = 1e-5
         
         self.num_tests_checked = 0
@@ -1141,7 +1143,7 @@ class Particle():
                 check_results.tp += num_pos_remaining 
                 check_results.tn += num_neg_remaining
                 min_dist = 1 - check_results.balanced_accuracy()
-                if min_dist > self.epsilon:
+                if min_dist > epsilon:
                     break
             counter.step()        
         counter.stop()
@@ -1229,9 +1231,16 @@ class Particle():
             min_dist_expts = 1.0 - (1.0 * num_tn + num_tests_remaining) / self.num_essential_expts
             min_dist_tot = blocked_weight*fraction_rendered_blocked\
                         +(1-blocked_weight)*min_dist_expts
-                        
+            
+            current_distance = num_fp/(num_fp+num_tn)
+            
             #self.vprint("{}\t{}\t{}".format(num_tests_remaining, min_dist_tot, max_dist_tot), verbose)
-            print("{}\t{:4}\t{:4}".format(num_tests_remaining, min_dist_tot, max_dist_tot))
+            print("{}\t{:4}\t{:4}\t{:4}".format(
+                                        num_tests_remaining,
+                                        min_dist_tot,
+                                        max_dist_tot,
+                                        current_distance
+                                        ))
             
             if min_dist_tot > self.epsilon:
                 self.vprint("Minimum distance > epsilon, aborting ...", verbose)
