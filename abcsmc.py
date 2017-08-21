@@ -1234,27 +1234,38 @@ class Particle():
             
             current_distance = 1
             if num_fp+num_tn > 0:
-                current_distance = num_fp/(num_fp+num_tn)
+                current_distance = float(num_fp)/(num_fp+num_tn)
             
             #self.vprint("{}\t{}\t{}".format(num_tests_remaining, min_dist_tot, max_dist_tot), verbose)
-            print("{}\t{:4}\t{:4}\t{:4}".format(
+            print("{}\t{:4}\t{:4}\t{:4}\t{}\t{}".format(
                                         num_tests_remaining,
                                         min_dist_tot,
                                         max_dist_tot,
-                                        current_distance
+                                        current_distance,
+                                        num_tn,
+                                        num_fp
                                         ))
+            if debug:
+                print min_dist_expts, max_dist_expts
             
-            if min_dist_tot > self.epsilon:
-                self.vprint("Minimum distance > epsilon, aborting ...", verbose)
-                self.result = min_dist_tot
-                return None
-            if max_dist_tot < self.epsilon:
-                self.vprint("Maximum distance < epsilon, finishing ...", verbose)
-                self.result = max_dist_tot
-                return None
-               
+            if not debug:
+                if min_dist_tot > self.epsilon:
+                    self.vprint("Minimum distance > epsilon, aborting ...", verbose)
+                    self.result = min_dist_tot
+                    return None
+                if max_dist_tot < self.epsilon:
+                    self.vprint("Maximum distance < epsilon, finishing ...", verbose)
+                    self.result = max_dist_tot
+                    return None
+                   
         distance = blocked_weight*fraction_rendered_blocked\
             + (1-blocked_weight)*(1.0 - num_tn / self.num_essential_expts)
+        if debug:
+            print("\nFraction blocked = {}".format(fraction_rendered_blocked))
+            print("Blocked weight = {}".format(blocked_weight))
+            print("\nWeighted blocked = {}".format(blocked_weight*fraction_rendered_blocked))
+            print("Final distance = {:5}".format(distance))
+            print num_tn, num_fp
         ## Should I be returning distance if I have already worked out that it passes?
         self.result = distance
         return None
